@@ -1,0 +1,344 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ink: #060e16;
+    --ink-light: #001a2e;
+    --ink-mid: #0a1f30;
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34, 211, 238, 0.08);
+    --cyan-mid: rgba(34, 211, 238, 0.2);
+    --cyan-glow: rgba(34, 211, 238, 0.15);
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --white: #e8f4f8;
+    --muted: rgba(255, 255, 255, 0.45);
+    --muted-dim: rgba(255, 255, 255, 0.3);
+    --border-subtle: rgba(34, 211, 238, 0.1);
+    --border-faint: rgba(255, 255, 255, 0.08);
+    --surface: rgb(42 48 50);
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  html.light-mode {
+    --ink: #f8fafc;
+    --ink-light: #ffffff;
+    --ink-mid: #f1f5f9;
+    --cyan: #0891b2;
+    --cyan-dim: rgba(8, 145, 178, 0.08);
+    --cyan-mid: rgba(8, 145, 178, 0.2);
+    --cyan-glow: rgba(8, 145, 178, 0.15);
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+    --white: #0f172a;
+    --muted: rgba(15, 23, 42, 0.5);
+    --muted-dim: rgba(15, 23, 42, 0.35);
+    --border-subtle: rgba(8, 145, 178, 0.15);
+    --border-faint: rgba(15, 23, 42, 0.08);
+    --surface: rgb(238 238 238);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #94a3b8;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-dm-sans bg-ink text-text-primary min-h-screen overflow-x-hidden text-sm leading-none;
+  }
+
+  body::before {
+    content: '';
+    @apply fixed inset-0 pointer-events-none;
+    z-index: 0;
+    background-image:
+      linear-gradient(var(--cyan-glow) 1px, transparent 1px),
+      linear-gradient(90deg, var(--cyan-glow) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  body > * {
+    @apply relative;
+    z-index: 1;
+  }
+
+  html.light-mode body::before {
+    background-image:
+      linear-gradient(rgba(8, 144, 178, 0.14) 1px, #70383800 0),
+      linear-gradient(90deg, rgba(8, 144, 178, 0.124) 1px, transparent 0);
+  }
+}
+
+@layer components {
+  /* Table sort indicators */
+  #prTable th.sortable::after {
+    content: ' ↕';
+    @apply opacity-30 text-[10px];
+  }
+  #prTable th.sorted-asc::after {
+    content: ' ↑';
+    @apply opacity-100 text-cyan;
+  }
+  #prTable th.sorted-desc::after {
+    content: ' ↓';
+    @apply opacity-100 text-cyan;
+  }
+
+  /* Repo color backgrounds (dynamic, used by JS) */
+  .repo-bg-0 {
+    background: rgba(34, 211, 238, 0.04) !important;
+  }
+  .repo-bg-1 {
+    background: rgba(34, 197, 94, 0.04) !important;
+  }
+  .repo-bg-2 {
+    background: rgba(245, 158, 11, 0.04) !important;
+  }
+  .repo-bg-3 {
+    background: rgba(239, 68, 68, 0.04) !important;
+  }
+  .repo-bg-4 {
+    background: rgba(168, 85, 247, 0.04) !important;
+  }
+  .repo-bg-5 {
+    background: rgba(236, 72, 153, 0.04) !important;
+  }
+  .repo-bg-6 {
+    background: rgba(99, 102, 241, 0.04) !important;
+  }
+  .repo-bg-7 {
+    background: rgba(20, 184, 166, 0.04) !important;
+  }
+
+  .repo-bg-0:hover {
+    background: rgba(34, 211, 238, 0.07) !important;
+  }
+  .repo-bg-1:hover {
+    background: rgba(34, 197, 94, 0.07) !important;
+  }
+  .repo-bg-2:hover {
+    background: rgba(245, 158, 11, 0.07) !important;
+  }
+  .repo-bg-3:hover {
+    background: rgba(239, 68, 68, 0.07) !important;
+  }
+  .repo-bg-4:hover {
+    background: rgba(168, 85, 247, 0.07) !important;
+  }
+  .repo-bg-5:hover {
+    background: rgba(236, 72, 153, 0.07) !important;
+  }
+  .repo-bg-6:hover {
+    background: rgba(99, 102, 241, 0.07) !important;
+  }
+  .repo-bg-7:hover {
+    background: rgba(20, 184, 166, 0.07) !important;
+  }
+
+  html.light-mode .repo-bg-0 {
+    background: rgba(8, 145, 178, 0.04) !important;
+  }
+  html.light-mode .repo-bg-1 {
+    background: rgba(22, 163, 74, 0.04) !important;
+  }
+  html.light-mode .repo-bg-2 {
+    background: rgba(217, 119, 6, 0.04) !important;
+  }
+  html.light-mode .repo-bg-3 {
+    background: rgba(220, 38, 38, 0.04) !important;
+  }
+  html.light-mode .repo-bg-4 {
+    background: rgba(168, 85, 247, 0.04) !important;
+  }
+  html.light-mode .repo-bg-5 {
+    background: rgba(236, 72, 153, 0.04) !important;
+  }
+  html.light-mode .repo-bg-6 {
+    background: rgba(99, 102, 241, 0.04) !important;
+  }
+  html.light-mode .repo-bg-7 {
+    background: rgba(20, 184, 166, 0.04) !important;
+  }
+
+  html.light-mode .repo-bg-0:hover {
+    background: rgba(8, 145, 178, 0.07) !important;
+  }
+  html.light-mode .repo-bg-1:hover {
+    background: rgba(22, 163, 74, 0.07) !important;
+  }
+  html.light-mode .repo-bg-2:hover {
+    background: rgba(217, 119, 6, 0.07) !important;
+  }
+  html.light-mode .repo-bg-3:hover {
+    background: rgba(220, 38, 38, 0.07) !important;
+  }
+  html.light-mode .repo-bg-4:hover {
+    background: rgba(168, 85, 247, 0.07) !important;
+  }
+  html.light-mode .repo-bg-5:hover {
+    background: rgba(236, 72, 153, 0.07) !important;
+  }
+  html.light-mode .repo-bg-6:hover {
+    background: rgba(99, 102, 241, 0.07) !important;
+  }
+  html.light-mode .repo-bg-7:hover {
+    background: rgba(20, 184, 166, 0.07) !important;
+  }
+
+  /* Button active states */
+  .btn-secondary.active {
+    @apply border-cyan-mid bg-cyan-dim text-cyan;
+  }
+
+  html.light-mode .btn-secondary.active {
+    @apply border-cyan-mid bg-cyan-dim text-cyan;
+  }
+
+  /* Repo selector active state */
+  .repo-selector-trigger.active {
+    @apply border-cyan;
+  }
+
+  /* Repo option selected state */
+  .repo-option.selected {
+    @apply bg-cyan-dim text-cyan;
+  }
+
+  .repo-option.selected .repo-option-checkbox {
+    @apply border-cyan bg-cyan-dim;
+  }
+
+  html.light-mode .repo-option.selected {
+    @apply bg-cyan-dim text-cyan;
+  }
+
+  html.light-mode .repo-option.selected .repo-option-checkbox {
+    @apply border-cyan bg-cyan-dim;
+  }
+
+  /* JS-generated element styles that use theme-aware colors */
+  .mentions {
+    @apply text-[11px] max-w-[200px] break-words;
+    color: var(--muted-dim);
+  }
+  .muted-dash {
+    color: rgba(255, 255, 255, 0.2);
+  }
+  html.light-mode .muted-dash {
+    color: rgba(15, 23, 42, 0.2);
+  }
+  .pr-updated {
+    @apply whitespace-nowrap font-space-mono text-xs;
+    color: var(--muted-dim);
+  }
+  .help-box-desc {
+    @apply text-[13px];
+    color: var(--muted);
+  }
+  .empty-state-sub {
+    @apply text-[13px] mx-auto max-w-[400px];
+    color: var(--muted);
+  }
+
+  /* Repo color indicators (dynamic, used by JS) */
+  .repo-color-0 {
+    background: var(--cyan);
+  }
+  .repo-color-1 {
+    background: var(--green);
+  }
+  .repo-color-2 {
+    background: var(--amber);
+  }
+  .repo-color-3 {
+    background: var(--red);
+  }
+  .repo-color-4 {
+    background: #a855f7;
+  }
+  .repo-color-5 {
+    background: #ec4899;
+  }
+  .repo-color-6 {
+    background: #6366f1;
+  }
+  .repo-color-7 {
+    background: #14b8a6;
+  }
+
+  /* Pulse opacity for SVG animation */
+  @keyframes pulse-opacity {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  /* Owned PR highlight */
+  #prTable tbody tr.owned-pr {
+    border-left: 3px solid var(--cyan);
+    background: rgba(34, 211, 238, 0.04);
+  }
+  #prTable tbody tr.owned-pr:hover {
+    background: rgba(34, 211, 238, 0.06);
+  }
+
+  html.light-mode #prTable tbody tr.owned-pr {
+    border-left: 3px solid var(--cyan);
+    background: rgba(8, 145, 178, 0.04);
+  }
+  html.light-mode #prTable tbody tr.owned-pr:hover {
+    background: rgba(8, 145, 178, 0.06);
+  }
+
+  /* Override Tailwind preflight border on table cells */
+  #prTable td {
+    border-style: none;
+  }
+
+  /* Status message visibility */
+  .status-message.show {
+    @apply block;
+  }
+
+  /* Loading spinner */
+  .loading {
+    @apply inline-block animate-spin-loader align-middle;
+    width: 16px;
+    height: 16px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+  }
+
+  html.light-mode .loading {
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--cyan);
+  }
+
+  /* Settings modal */
+  #settingsModal {
+    background: var(--surface);
+  }
+  #settingsModalBackdrop {
+    background: rgba(0, 0, 0, 0.6);
+  }
+  html.light-mode #settingsModalBackdrop {
+    background: rgba(0, 0, 0, 0.4);
+  }
+}

@@ -1,0 +1,51 @@
+<svg viewBox="0 0 440 440" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="220" cy="220" r="200" stroke="#0891b2" stroke-width="0.8" stroke-opacity="0.25" />
+  <circle cx="220" cy="220" r="155" stroke="#0891b2" stroke-width="1" stroke-opacity="0.35" />
+  <circle cx="220" cy="220" r="110" stroke="#0891b2" stroke-width="1.2" stroke-opacity="0.45" />
+  <circle cx="220" cy="220" r="65" stroke="#0891b2" stroke-width="1.4" stroke-opacity="0.55" />
+  <circle cx="220" cy="220" r="22" stroke="#0891b2" stroke-width="1.6" stroke-opacity="0.7" />
+  <line x1="220" y1="16" x2="220" y2="44" stroke="#0891b2" stroke-width="1.2" stroke-opacity="0.45"
+    stroke-linecap="round" />
+  <line x1="220" y1="396" x2="220" y2="424" stroke="#0891b2" stroke-width="1.2" stroke-opacity="0.45"
+    stroke-linecap="round" />
+  <line x1="16" y1="220" x2="44" y2="220" stroke="#0891b2" stroke-width="1.2" stroke-opacity="0.45"
+    stroke-linecap="round" />
+  <line x1="396" y1="220" x2="424" y2="220" stroke="#0891b2" stroke-width="1.2" stroke-opacity="0.45"
+    stroke-linecap="round" />
+  <line x1="78" y1="78" x2="92" y2="92" stroke="#0891b2" stroke-width="1" stroke-opacity="0.3"
+    stroke-linecap="round" />
+  <line x1="362" y1="78" x2="348" y2="92" stroke="#0891b2" stroke-width="1" stroke-opacity="0.3"
+    stroke-linecap="round" />
+  <line x1="78" y1="362" x2="92" y2="348" stroke="#0891b2" stroke-width="1" stroke-opacity="0.3"
+    stroke-linecap="round" />
+  <line x1="362" y1="362" x2="348" y2="348" stroke="#0891b2" stroke-width="1" stroke-opacity="0.3"
+    stroke-linecap="round" />
+  <path d="M220 220 L390 68" stroke="#0891b2" stroke-width="3" stroke-linecap="round"
+    stroke-opacity="1" />
+  <path d="M220 220 L390 68 A204 204 0 0 0 220 16 Z" fill="#0891b2" fill-opacity="0.1" />
+  <line x1="220" y1="220" x2="420" y2="220" stroke="#0891b2" stroke-width="1.2" stroke-opacity="0.2"
+    stroke-linecap="round" />
+  <line x1="220" y1="220" x2="360" y2="96" stroke="#0891b2" stroke-width="1.2" stroke-opacity="0.3"
+    stroke-linecap="round" />
+  <g style="animation: pulse-opacity 2s ease-in-out infinite">
+    <circle cx="352" cy="108" r="18" stroke="#0891b2" stroke-width="1" stroke-opacity="0.35" fill="none" />
+    <circle cx="352" cy="108" r="8" fill="#0891b2" fill-opacity="0.25" />
+    <circle cx="352" cy="108" r="4" fill="#0891b2" />
+  </g>
+  <circle cx="340" cy="230" r="14" stroke="#0891b2" stroke-width="1" stroke-opacity="0.3" fill="none" />
+  <circle cx="340" cy="230" r="3" fill="#0891b2" opacity="0.85" />
+  <circle cx="130" cy="148" r="12" stroke="#0891b2" stroke-width="1" stroke-opacity="0.25" fill="none" />
+  <circle cx="130" cy="148" r="2.5" fill="#0891b2" opacity="0.65" />
+  <circle cx="300" cy="330" r="10" stroke="#0891b2" stroke-width="1" stroke-opacity="0.2" fill="none" />
+  <circle cx="300" cy="330" r="2.5" fill="#0891b2" opacity="0.55" />
+  <circle cx="192" cy="268" r="10" fill="none" stroke="#0891b2" stroke-width="2.6" />
+  <circle cx="192" cy="192" r="10" fill="none" stroke="#0891b2" stroke-width="2.6" />
+  <circle cx="252" cy="192" r="10" fill="#0891b2" />
+  <path d="M245 186 L252 192 L245 198" fill="none" stroke="#f8fafc" stroke-width="2.2" stroke-linecap="round"
+    stroke-linejoin="round" />
+  <line x1="192" y1="202" x2="192" y2="258" stroke="#0891b2" stroke-width="2.6" stroke-linecap="round" />
+  <path d="M252 202 Q252 268 224 268 Q208 268 192 268" stroke="#0891b2" stroke-width="2.2"
+    stroke-linecap="round" fill="none" stroke-dasharray="4 3" />
+  <circle cx="220" cy="220" r="5" fill="#0891b2" opacity="0.65" />
+  <circle cx="220" cy="220" r="2.5" fill="#0891b2" />
+</svg>
