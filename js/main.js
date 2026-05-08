@@ -1,6 +1,8 @@
 import {
   scrollToFeatures,
   scrollToHowItWorks,
+  showDashboard,
+  showLanding,
   loadPRs,
   toggleTheme,
   toggleAutoRefresh,
@@ -10,6 +12,7 @@ import {
   loadSavedRepos,
   initializeApp,
   addRepoManually,
+  settingsAddRepo,
   showMessage,
   showPatInput,
   hidePatInput,
@@ -19,6 +22,8 @@ import {
   closeSettingsModal,
   openStatusReport,
   closeStatusReport,
+  openPRDrawer,
+  closePRDrawer,
 } from './ui.js';
 import { setFilter, clearSort, sortTable } from './render.js';
 import {
@@ -34,6 +39,8 @@ import {
 
 window.scrollToFeatures = scrollToFeatures;
 window.scrollToHowItWorks = scrollToHowItWorks;
+window.showDashboard = showDashboard;
+window.showLanding = showLanding;
 window.loadPRs = loadPRs;
 window.toggleTheme = toggleTheme;
 window.toggleAutoRefresh = toggleAutoRefresh;
@@ -41,6 +48,7 @@ window.toggleNotifications = toggleNotifications;
 window.clearChangesNotif = clearChangesNotif;
 window.updateRefreshInterval = updateRefreshInterval;
 window.addRepoManually = addRepoManually;
+window.settingsAddRepo = settingsAddRepo;
 window.showPatInput = showPatInput;
 window.hidePatInput = hidePatInput;
 window.savePatToken = savePatToken;
@@ -49,6 +57,8 @@ window.openSettingsModal = openSettingsModal;
 window.closeSettingsModal = closeSettingsModal;
 window.openStatusReport = openStatusReport;
 window.closeStatusReport = closeStatusReport;
+window.openPRDrawer = openPRDrawer;
+window.closePRDrawer = closePRDrawer;
 window.setFilter = setFilter;
 window.clearSort = clearSort;
 window.sortTable = sortTable;

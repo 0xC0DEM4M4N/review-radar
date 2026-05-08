@@ -1,0 +1,224 @@
+---
+layout: base.njk
+title: ReviewRadar Guide
+---
+<script>document.body.classList.add('rr-guide-page');</script>
+
+<aside class="rr-sidebar">
+  <a href="/dashboard" class="rr-sidebar-icon" title="Dashboard">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor"/><rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.4"/><rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.4"/><rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.4"/></svg>
+  </a>
+  <a href="/reports" class="rr-sidebar-icon" title="Reports">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="9" width="3" height="5" rx="1" fill="currentColor"/><rect x="6.5" y="5" width="3" height="9" rx="1" fill="currentColor"/><rect x="11" y="2" width="3" height="12" rx="1" fill="currentColor"/></svg>
+  </a>
+  <div class="rr-sidebar-spacer"></div>
+  <a href="/settings" class="rr-sidebar-icon" title="Settings">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/></svg>
+  </a>
+</aside>
+
+<div class="rr-main">
+
+  <!-- Header Row -->
+  <div class="rr-header-row">
+    <div style="height:60px;"></div>
+    <div class="rr-radar-bg">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="8" stroke="#22d3ee" stroke-width="1.3" stroke-opacity="0.35"/>
+        <circle cx="20" cy="20" r="14" stroke="#22d3ee" stroke-width="0.9" stroke-opacity="0.18"/>
+        <circle cx="20" cy="20" r="19" stroke="#22d3ee" stroke-width="0.6" stroke-opacity="0.1"/>
+        <circle cx="20" cy="20" r="2" fill="#22d3ee"/>
+      </svg>
+    </div>
+    <div style="flex:1;min-width:0;">
+      <h1 class="rr-header-title">Guide</h1>
+      <p class="rr-header-sub">Learn how to use ReviewRadar</p>
+    </div>
+  </div>
+
+<!-- Main Content -->
+<div style="max-width:900px;margin:0 auto;padding:32px;min-height:100vh;">
+
+  <!-- Header -->
+  <div style="margin-bottom:56px;">
+    <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Documentation</div>
+    <h1 style="font-size:48px;font-weight:700;color:var(--text-primary);margin:0 0 16px 0;line-height:1.1;">How to use <span style="color:var(--cyan);">ReviewRadar</span></h1>
+    <p style="font-size:16px;color:var(--muted);margin:0;line-height:1.6;max-width:700px;">Learn how to monitor, organize, and manage your GitHub pull requests with ReviewRadar. Get started in minutes.</p>
+  </div>
+
+  <!-- Getting Started Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Getting Started</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Step 1: Create a GitHub Token</div>
+      <ol style="margin:0;padding-left:20px;color:var(--muted);line-height:1.7;font-size:14px;">
+        <li style="margin-bottom:8px;">Go to <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--cyan);text-decoration:none;font-weight:600;">github.com/settings/tokens/new</a></li>
+        <li style="margin-bottom:8px;">Give your token a descriptive name (e.g., "ReviewRadar")</li>
+        <li style="margin-bottom:8px;">Under "Scopes", select <span style="font-family:'Space Mono',monospace;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;color:var(--cyan);">repo</span> scope</li>
+        <li style="margin-bottom:8px;">Click "Generate token"</li>
+        <li style="margin-bottom:8px;"><strong style="color:var(--text-primary);">Copy the token immediately</strong> — you won't be able to see it again</li>
+        <li>Paste the token in ReviewRadar's Settings page</li>
+      </ol>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Step 2: Access ReviewRadar</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Paste your token on the <strong style="color:var(--text-primary);">Settings page</strong>, then head to the <strong style="color:var(--text-primary);">Dashboard</strong> to load your pull requests. Click "Sweep now" to fetch all your PRs.</p>
+    </div>
+  </div>
+
+  <!-- Dashboard Overview Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Dashboard Overview</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Repository Selector</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Dropdown menu to view PRs from specific repositories or all repos. Repositories are auto-discovered when you sweep, or you can add them manually in Settings.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">PR Table</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">7-column view showing Author, PR Title, Status, Review Count, Requested Reviewers, Time since update, and Actions. Click any column header to sort.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Stat Cards</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Quick overview of total PRs, awaiting review, approved, and changes requested counts.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Status Badges</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Visual indicators: Green (approved), Orange (changes requested), Cyan (in review), Gray (awaiting review).</p>
+    </div>
+  </div>
+
+  <!-- Managing Repositories Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Managing Repositories</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Auto-Discovery</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">When you run "Sweep now", ReviewRadar automatically discovers all repositories from your assigned PRs and saves them.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Manual Addition</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Go to <strong style="color:var(--text-primary);">Settings → Saved Repositories</strong> and add repos manually. Format: <span style="font-family:'Space Mono',monospace;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;color:var(--cyan);">owner/repo-name</span></p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Selecting Repositories</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Use the repository dropdown on the dashboard to filter PRs by specific repos or view all at once.</p>
+    </div>
+  </div>
+
+  <!-- Auto-Refresh Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Auto-Refresh & Notifications</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Enabling Auto-Refresh</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Go to <strong style="color:var(--text-primary);">Settings → Refresh & Notifications</strong> and toggle "Auto-refresh PRs". The dashboard will refresh at your configured interval.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Setting Interval</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Choose an interval from 1-60 minutes (default is 5 minutes). Lower intervals mean more frequent API requests and faster updates.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Browser Notifications</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Enable notifications to receive browser alerts when PRs are approved or changes are requested.</p>
+    </div>
+  </div>
+
+  <!-- Theme & Appearance Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Theme & Appearance</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Dark & Light Mode</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">ReviewRadar supports both dark and light modes. Go to <strong style="color:var(--text-primary);">Settings → Appearance</strong> to switch themes. Your choice is saved automatically.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Default Theme</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">ReviewRadar defaults to dark mode for a comfortable viewing experience. Light mode is available for those who prefer it.</p>
+    </div>
+  </div>
+
+  <!-- Data & Privacy Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Data Storage & Privacy</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Local Storage Only</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">ReviewRadar stores all data locally in your browser. Your GitHub PAT, cached PRs, and preferences are never sent to external servers.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">What Gets Stored</div>
+      <ul style="margin:0;padding-left:20px;color:var(--muted);line-height:1.7;font-size:14px;">
+        <li style="margin-bottom:6px;"><strong style="color:var(--text-primary);">GitHub PAT:</strong> Stored locally, never shared</li>
+        <li style="margin-bottom:6px;"><strong style="color:var(--text-primary);">PR Data:</strong> Cached for offline viewing</li>
+        <li style="margin-bottom:6px;"><strong style="color:var(--text-primary);">Settings:</strong> Theme, auto-refresh, notification preferences</li>
+        <li><strong style="color:var(--text-primary);">Repositories:</strong> List of configured repos</li>
+      </ul>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Clear Data</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Go to <strong style="color:var(--text-primary);">Settings → Data Management</strong> to clear cached PR data, saved repos, or all data at once.</p>
+    </div>
+  </div>
+
+  <!-- Tips & Tricks Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Tips & Tricks</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <ul style="margin:0;padding-left:20px;color:var(--muted);line-height:1.8;font-size:14px;">
+        <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Sort PRs:</strong> Click any column header to sort by that field</li>
+        <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Filter by Status:</strong> Use status pills below the toolbar to view specific PR states</li>
+        <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Multiple Repos:</strong> Monitor several repositories to track your entire team's work</li>
+        <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Reports Page:</strong> View trends and metrics across all repositories</li>
+        <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Auto-Refresh:</strong> Leave the dashboard open and let it update automatically</li>
+        <li><strong style="color:var(--text-primary);">Browser Notifications:</strong> Stay alert without constantly checking the dashboard</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Troubleshooting Section -->
+  <div style="margin-bottom:60px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Troubleshooting</h2>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">PAT Not Working?</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Make sure your token has the <span style="font-family:'Space Mono',monospace;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;color:var(--cyan);">repo</span> scope selected. Tokens expire after one year — create a new one if yours has expired.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">No PRs Showing?</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Try clicking "Sweep now" to force a refresh. Make sure you have PRs assigned to you, or add repositories to your watch list in Settings.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Data Lost After Refresh?</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Clearing your browser storage will remove cached data. Your GitHub PAT is only stored locally and can be re-entered anytime.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Still Having Issues?</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Check your browser's Developer Console (F12) for error messages. Ensure your GitHub account has access to the repositories you're monitoring.</p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="border-top:0.5px solid var(--border-faint);padding-top:32px;text-align:center;color:var(--muted);font-family:'Space Mono',monospace;font-size:12px;margin-top:60px;">
+    <p style="margin:0;">© 2026 ReviewRadar · GitHub PR Dashboard</p>
+  </div>
+
+</div>
+
+</div>

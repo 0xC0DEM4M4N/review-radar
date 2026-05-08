@@ -24,7 +24,8 @@ export function updateRepoSelectorText() {
       : count === 1
         ? Array.from(state.selectedRepos)[0]
         : `${count} repos selected`;
-  document.getElementById('repoSelectorText').textContent = text;
+  const elem = document.getElementById('repoSelectorText');
+  if (elem) elem.textContent = text;
 }
 
 export function renderRepoList() {
@@ -107,6 +108,11 @@ export function filterRepoList() {
   renderRepoList();
 }
 
+export function saveRepoSelections() {
+  const selections = Array.from(state.selectedRepos);
+  localStorage.setItem('selected-repos', JSON.stringify(selections));
+}
+
 export function toggleRepoSelection(repo) {
   if (state.selectedRepos.has(repo)) {
     state.selectedRepos.delete(repo);
@@ -115,6 +121,7 @@ export function toggleRepoSelection(repo) {
   }
   updateRepoSelectorText();
   renderRepoList();
+  saveRepoSelections();
 
   if (state.allPRs.length > 0) {
     renderTable();
@@ -127,6 +134,7 @@ export function selectAllRepos() {
   repos.forEach((r) => state.selectedRepos.add(r));
   updateRepoSelectorText();
   renderRepoList();
+  saveRepoSelections();
   if (state.allPRs.length > 0) renderTable();
 }
 
@@ -134,6 +142,7 @@ export function clearRepoSelection() {
   state.selectedRepos.clear();
   updateRepoSelectorText();
   renderRepoList();
+  saveRepoSelections();
   if (state.allPRs.length > 0) renderTable();
 }
 

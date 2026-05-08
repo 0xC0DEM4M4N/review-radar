@@ -12,6 +12,7 @@ export const state = {
   repoColorMap: {},
   repoDropdownOpen: false,
   repoSelectionSnapshot: null,
+  prDataMap: {}, // Store PR data by ID for drawer
 };
 
 export const REPO_COLORS = [

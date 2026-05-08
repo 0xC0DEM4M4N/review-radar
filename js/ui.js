@@ -17,12 +17,21 @@ export function scrollToFeatures() {
   window.location.href = '/#features';
 }
 
+export function showDashboard() {
+  window.location.href = '/dashboard';
+}
+
+export function showLanding() {
+  window.location.href = '/';
+}
+
 export function scrollToHowItWorks() {
   window.location.href = '/#how-it-works';
 }
 
 export async function loadPRs() {
-  state.pat = document.getElementById('patInput').value.trim();
+  const patElem = document.getElementById('patInput');
+  state.pat = patElem ? patElem.value.trim() : '';
 
   if (!state.pat) {
     showMessage('Please enter a GitHub PAT', 'error');
@@ -96,6 +105,9 @@ export async function loadPRs() {
 
     state.allPRs = prsWithReviews;
 
+    // Persist PRs for the reports page
+    try { localStorage.setItem('reviewradar-prs', JSON.stringify(state.allPRs)); } catch(e) {}
+
     const discoveredRepos = new Set();
     state.allPRs.forEach((pr) => {
       const repoUrl = pr.repository_url || pr.url;
@@ -118,7 +130,7 @@ export async function loadPRs() {
     if (helpText) helpText.style.display = 'none';
 
     document.getElementById('statsContainer').style.display = 'grid';
-    document.getElementById('filterControls').style.display = 'block';
+    document.getElementById('filterControls').style.display = 'flex';
     showMessage(
       `Loaded ${state.allPRs.length} pull requests from ${discoveredRepos.size} repos`,
       'success',
@@ -203,7 +215,10 @@ export function updateRadarImage() {
 }
 
 export function toggleAutoRefresh() {
-  const enabled = document.getElementById('autoRefreshToggle').checked;
+  const elem = document.getElementById('autoRefreshToggle');
+  if (!elem) return;
+  const enabled = elem.checked;
+  localStorage.setItem('auto-refresh-enabled', enabled ? 'true' : 'false');
   if (enabled) {
     startAutoRefresh();
     showMessage('Auto-refresh enabled ✅', 'success');
@@ -214,15 +229,20 @@ export function toggleAutoRefresh() {
 }
 
 export function toggleNotifications() {
-  const enabled = document.getElementById('notificationsToggle').checked;
+  const elem = document.getElementById('notificationsToggle');
+  if (!elem) return;
+  const enabled = elem.checked;
   if (enabled) {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().then((permission) => {
         if (permission === 'granted') {
           state.notificationsEnabled = true;
+          localStorage.setItem('notifications-enabled', 'true');
           showMessage('Notifications enabled 🔔', 'success');
         } else {
-          document.getElementById('notificationsToggle').checked = false;
+          const notifElem = document.getElementById('notificationsToggle');
+          if (notifElem) notifElem.checked = false;
+          localStorage.setItem('notifications-enabled', 'false');
           showMessage('Notification permission denied', 'error');
         }
       });
@@ -231,13 +251,17 @@ export function toggleNotifications() {
       Notification.permission === 'granted'
     ) {
       state.notificationsEnabled = true;
+      localStorage.setItem('notifications-enabled', 'true');
       showMessage('Notifications enabled 🔔', 'success');
     } else {
       showMessage('Notifications not supported in your browser', 'error');
-      document.getElementById('notificationsToggle').checked = false;
+      const notifElem = document.getElementById('notificationsToggle');
+      if (notifElem) notifElem.checked = false;
+      localStorage.setItem('notifications-enabled', 'false');
     }
   } else {
     state.notificationsEnabled = false;
+    localStorage.setItem('notifications-enabled', 'false');
     showMessage('Notifications disabled', 'info');
   }
 }
@@ -249,9 +273,13 @@ export function clearChangesNotif() {
 }
 
 export function updateRefreshInterval() {
-  state.refreshInterval =
-    parseInt(document.getElementById('refreshInterval').value) || 5;
-  if (document.getElementById('autoRefreshToggle').checked) {
+  const elem = document.getElementById('refreshInterval');
+  if (elem) {
+    state.refreshInterval = parseInt(elem.value) || 5;
+  }
+  localStorage.setItem('refresh-interval', state.refreshInterval.toString());
+  const autoElem = document.getElementById('autoRefreshToggle');
+  if (autoElem && autoElem.checked) {
     stopAutoRefresh();
     startAutoRefresh();
   }
@@ -262,7 +290,8 @@ export function startAutoRefresh() {
 
   if (!state.pat) {
     showMessage('Please load PRs first', 'error');
-    document.getElementById('autoRefreshToggle').checked = false;
+    const elem = document.getElementById('autoRefreshToggle');
+    if (elem) elem.checked = false;
     return;
   }
 
@@ -318,7 +347,8 @@ async function autoRefreshPRs() {
 
 export function updateRefreshStatus() {
   const now = new Date().toLocaleTimeString();
-  document.getElementById('refreshStatus').textContent = `Last updated: ${now}`;
+  const elem = document.getElementById('refreshStatus');
+  if (elem) elem.textContent = `Last updated: ${now}`;
 }
 
 function detectAndNotifyChanges(previousPRs, currentPRs) {
@@ -445,10 +475,13 @@ function detectAndNotifyChanges(previousPRs, currentPRs) {
   }
 
   if (changeCount > 0) {
-    document.getElementById('changesCount').textContent = changeCount;
+    const countElem = document.getElementById('changesCount');
+    if (countElem) countElem.textContent = changeCount;
     const el = document.getElementById('changesNotif');
-    el.classList.remove('hidden');
-    el.classList.add('inline-flex');
+    if (el) {
+      el.classList.remove('hidden');
+      el.classList.add('inline-flex');
+    }
   }
 }
 
@@ -485,7 +518,20 @@ export function loadSavedRepos() {
   // Save the cleaned list back
   localStorage.setItem('github-repos', JSON.stringify(repos));
 
-  // Don't auto-select repos on load — allow empty selection
+  // Restore previously selected repos
+  const savedSelections = localStorage.getItem('selected-repos');
+  if (savedSelections) {
+    try {
+      const selections = JSON.parse(savedSelections);
+      selections.forEach((repo) => {
+        if (repos.includes(repo)) {
+          state.selectedRepos.add(repo);
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to restore repo selections:', e);
+    }
+  }
 
   updateRepoSelectorText();
 }
@@ -506,7 +552,12 @@ export function saveRepo(repoName) {
 }
 
 export function savePatToken() {
-  const patVal = document.getElementById('patInput').value.trim();
+  const elem = document.getElementById('patInput');
+  if (!elem) {
+    showMessage('Error: Form not found', 'error');
+    return;
+  }
+  const patVal = elem.value.trim();
   if (patVal) {
     localStorage.setItem('github-pat', patVal);
     hidePatInput();
@@ -555,7 +606,6 @@ export function showPatInput() {
     inputWrap.classList.remove('hidden');
     savedWrap.classList.add('hidden');
     savedWrap.classList.remove('flex');
-    document.getElementById('patInput').focus();
   }
   // Modal elements
   const modalInput = document.getElementById('modalPatInputWrap');
@@ -564,8 +614,9 @@ export function showPatInput() {
     modalInput.classList.remove('hidden');
     modalSaved.classList.add('hidden');
     modalSaved.classList.remove('flex');
-    document.getElementById('patInput').focus();
   }
+  const patElem = document.getElementById('patInput');
+  if (patElem) patElem.focus();
   toggleHelpText(false);
 }
 
@@ -581,10 +632,11 @@ export function openSettingsModal() {
     modal.classList.add('scale-100', 'opacity-100');
   }
   const savedPat = localStorage.getItem('github-pat');
-  if (savedPat) {
-    document.getElementById('patInput').value = savedPat;
+  const patElem = document.getElementById('patInput');
+  if (savedPat && patElem) {
+    patElem.value = savedPat;
     hidePatInput();
-  } else {
+  } else if (patElem) {
     showPatInput();
   }
 }
@@ -608,7 +660,11 @@ export async function openStatusReport() {
   if (backdrop && modal) {
     // Render fresh data before showing
     const { renderStatusReport } = await import('./render.js');
-    renderStatusReport();
+    const hasData = renderStatusReport();
+    
+    // Only show modal if there's data to report on
+    if (!hasData) return;
+    
     backdrop.style.display = 'flex';
     void backdrop.offsetWidth;
     backdrop.classList.remove('opacity-0');
@@ -642,10 +698,30 @@ export function addRepoManually() {
   }
 }
 
+export function settingsAddRepo() {
+  const input = document.getElementById('addRepoInput');
+  if (!input) return;
+  const repo = input.value.trim();
+  if (repo && repo.includes('/')) {
+    saveRepo(repo);
+    input.value = '';
+    showMessage('Repository added ✅', 'success');
+    // Update settings repo list if it exists
+    if (window.renderSettingsRepos) {
+      window.renderSettingsRepos();
+    }
+  } else if (repo) {
+    alert('Invalid format. Use owner/repo (e.g., facebook/react)');
+  } else {
+    alert('Please enter a repository name');
+  }
+}
+
 export function initializeApp() {
   const savedPat = localStorage.getItem('github-pat');
-  if (savedPat) {
-    document.getElementById('patInput').value = savedPat;
+  const patElem = document.getElementById('patInput');
+  if (savedPat && patElem) {
+    patElem.value = savedPat;
     hidePatInput();
   }
   toggleHelpText(!!savedPat);
@@ -653,13 +729,24 @@ export function initializeApp() {
   const savedAutoRefresh =
     localStorage.getItem('auto-refresh-enabled') === 'true';
   const savedInterval = localStorage.getItem('refresh-interval');
+  const savedNotifications =
+    localStorage.getItem('notifications-enabled') === 'true';
 
   if (savedAutoRefresh) {
-    document.getElementById('autoRefreshToggle').checked = true;
+    const elem = document.getElementById('autoRefreshToggle');
+    if (elem) elem.checked = true;
   }
   if (savedInterval) {
     state.refreshInterval = parseInt(savedInterval);
-    document.getElementById('refreshInterval').value = state.refreshInterval;
+    const elem = document.getElementById('refreshInterval');
+    if (elem) elem.value = state.refreshInterval;
+  }
+  if (savedNotifications) {
+    state.notificationsEnabled = true;
+    const elem = document.getElementById('notificationsToggle');
+    if (elem) {
+      elem.checked = true;
+    }
   }
 
   const savedTheme = localStorage.getItem('reviewradar-theme');
@@ -695,11 +782,14 @@ export function initializeApp() {
     }
   });
 
-  document.getElementById('patInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      savePatToken();
-    }
-  });
+  const patInputElem = document.getElementById('patInput');
+  if (patInputElem) {
+    patInputElem.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        savePatToken();
+      }
+    });
+  }
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -707,17 +797,168 @@ export function initializeApp() {
     }
   });
 
-  document
-    .getElementById('autoRefreshToggle')
-    .addEventListener('change', () => {
+  const autoRefreshElem = document.getElementById('autoRefreshToggle');
+  if (autoRefreshElem) {
+    autoRefreshElem.addEventListener('change', () => {
       localStorage.setItem(
         'auto-refresh-enabled',
-        document.getElementById('autoRefreshToggle').checked,
+        autoRefreshElem.checked,
       );
     });
+  }
 
-  document.getElementById('refreshInterval').addEventListener('change', () => {
-    const interval = document.getElementById('refreshInterval').value;
-    localStorage.setItem('refresh-interval', interval);
+  const refreshIntervalElem = document.getElementById('refreshInterval');
+  if (refreshIntervalElem) {
+    refreshIntervalElem.addEventListener('change', () => {
+      const interval = refreshIntervalElem.value;
+      localStorage.setItem('refresh-interval', interval);
+    });
+  }
+}
+
+export function openPRDrawer(prId) {
+  const drawer = document.getElementById('prDrawer');
+  const backdrop = document.getElementById('prDrawerBackdrop');
+  
+  if (!drawer || !backdrop) return;
+
+  // Get PR data from state map
+  const pr = state.prDataMap[prId];
+  if (!pr) {
+    console.error('PR data not found for ID:', prId);
+    return;
+  }
+
+  // Helper function to replace media with placeholder text
+  function stripMediaFromHtml(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    
+    // Replace all img tags
+    const imgs = div.querySelectorAll('img');
+    imgs.forEach(img => {
+      const placeholder = document.createElement('div');
+      placeholder.style.cssText = 'background:rgba(255,255,255,0.05);border:1px dashed var(--border-faint);border-radius:8px;padding:12px;margin:12px 0;color:var(--muted);font-size:12px;text-align:center;font-style:italic;';
+      placeholder.textContent = 'media not available';
+      img.replaceWith(placeholder);
+    });
+    
+    // Replace all video tags
+    const videos = div.querySelectorAll('video');
+    videos.forEach(video => {
+      const placeholder = document.createElement('div');
+      placeholder.style.cssText = 'background:rgba(255,255,255,0.05);border:1px dashed var(--border-faint);border-radius:8px;padding:12px;margin:12px 0;color:var(--muted);font-size:12px;text-align:center;font-style:italic;';
+      placeholder.textContent = 'media not available';
+      video.replaceWith(placeholder);
+    });
+    
+    return div.innerHTML;
+  }
+
+  // Populate drawer content
+  document.getElementById('prDrawerTitle').textContent = pr.title || 'Untitled PR';
+  
+  // Import marked for markdown parsing
+  import('marked').then(({ marked }) => {
+    // Configure marked to render HTML and images properly
+    marked.setOptions({
+      breaks: true,
+      gfm: true
+    });
+    const description = pr.body || '*(No description provided)*';
+    const html = marked(description);
+    const cleanHtml = stripMediaFromHtml(html);
+    document.getElementById('prDrawerDescription').innerHTML = cleanHtml;
   });
+
+  // Render comments and reviews with markdown parsing
+  const commentsContainer = document.getElementById('prDrawerComments');
+  const allComments = [];
+
+  // Add reviews
+  if (pr.reviews && pr.reviews.length > 0) {
+    pr.reviews.forEach(review => {
+      allComments.push({
+        author: review.user?.login || 'unknown',
+        avatar: review.user?.avatar_url,
+        body: review.body || `*(${review.state})*`,
+        date: review.submitted_at || review.created_at,
+        state: review.state,
+        type: 'review'
+      });
+    });
+  }
+
+  // Add PR comments
+  if (pr.comments && pr.comments.length > 0) {
+    pr.comments.forEach(comment => {
+      allComments.push({
+        author: comment.user?.login || 'unknown',
+        avatar: comment.user?.avatar_url,
+        body: comment.body,
+        date: comment.created_at,
+        type: 'comment'
+      });
+    });
+  }
+
+  // Sort by date (oldest first)
+  allComments.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (allComments.length === 0) {
+    commentsContainer.innerHTML = '<p class="text-white/30 italic">No comments or reviews yet</p>';
+  } else {
+    import('marked').then(({ marked }) => {
+      // Configure marked to render HTML and images properly
+      marked.setOptions({
+        breaks: true,
+        gfm: true
+      });
+      commentsContainer.innerHTML = allComments.map(c => {
+        const date = new Date(c.date);
+        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const badge = c.type === 'review' ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,0.2);color:#22c55e;font-size:10px;font-weight:bold;">${c.state}</span>` : '';
+        const bodyHtml = marked(c.body || '');
+        const cleanBodyHtml = stripMediaFromHtml(bodyHtml);
+        return `
+          <div style="border-left:2px solid var(--border-faint);padding-left:12px;pb:4px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-weight:600;color:var(--text-primary);font-size:13px;">${c.author}</span>
+              <span style="font-size:11px;color:var(--muted);">${dateStr}</span>
+              ${badge}
+            </div>
+            <div style="color:var(--text-primary)/80;font-size:12px;line-height:1.5;word-break:break-word;" class="prose prose-invert prose-p:my-1 prose-headings:my-2 prose-code:bg-black/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-black/30 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs">${cleanBodyHtml}</div>
+          </div>
+        `;
+      }).join('');
+    });
+  }
+
+  // Show drawer
+  backdrop.style.display = 'block';
+  void backdrop.offsetWidth; // Trigger reflow
+  backdrop.classList.remove('opacity-0');
+  
+  drawer.style.display = 'block';
+  void drawer.offsetWidth; // Trigger reflow
+  drawer.classList.remove('translate-x-full');
+
+  // Prevent body scroll
+  document.body.style.overflow = 'hidden';
+}
+
+export function closePRDrawer() {
+  const drawer = document.getElementById('prDrawer');
+  const backdrop = document.getElementById('prDrawerBackdrop');
+  
+  if (!drawer || !backdrop) return;
+
+  backdrop.classList.add('opacity-0');
+  drawer.classList.add('translate-x-full');
+  
+  setTimeout(() => {
+    backdrop.style.display = 'none';
+    drawer.style.display = 'none';
+    document.body.style.overflow = '';
+  }, 300);
 }
