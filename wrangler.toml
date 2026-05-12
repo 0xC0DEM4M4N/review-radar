@@ -1,0 +1,7 @@
+name = "reviewradar"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
+
+[vars]
+# Add any public environment variables here if needed
+# All config is client-side for ReviewRadar

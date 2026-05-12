@@ -26,6 +26,26 @@ function getReviewSummary(pr) {
   return statusMap;
 }
 
+function getConsolidatedReviews(pr) {
+  const reviews = pr.reviews || [];
+  const reviewsByUser = {};
+  reviews.forEach(review => {
+    const userName = review.user?.login;
+    if (!userName) return;
+    if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED') return;
+    if (!reviewsByUser[userName] ||
+        new Date(review.submitted_at || review.created_at) >
+        new Date(reviewsByUser[userName].submitted_at || reviewsByUser[userName].created_at)) {
+      reviewsByUser[userName] = review;
+    }
+  });
+  return Object.values(reviewsByUser);
+}
+
+function getConsolidatedApprovalCount(pr) {
+  return getConsolidatedReviews(pr).filter(r => r.state === 'APPROVED').length;
+}
+
 function getMentions(pr) {
   const mentions = new Set();
   const bodyAndTitle = (pr.body || '') + ' ' + (pr.title || '');
@@ -42,28 +62,7 @@ function getMentions(pr) {
 }
 
 function getStatusBadge(pr) {
-  const reviews = pr.reviews || [];
-  
-  // Group reviews by reviewer and get the most recent APPROVED or CHANGES_REQUESTED from each
-  // (ignore COMMENTED reviews as they don't affect approval status)
-  const reviewsByUser = {};
-  reviews.forEach(review => {
-    const userName = review.user?.login;
-    if (!userName) return;
-    
-    // Only track APPROVED and CHANGES_REQUESTED states
-    if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED') return;
-    
-    if (!reviewsByUser[userName] || 
-        new Date(review.submitted_at || review.created_at) > 
-        new Date(reviewsByUser[userName].submitted_at || reviewsByUser[userName].created_at)) {
-      reviewsByUser[userName] = review;
-    }
-  });
-  
-  // Get the consolidated list of most-recent reviews
-  const latestReviews = Object.values(reviewsByUser);
-  
+  const latestReviews = getConsolidatedReviews(pr);
   const approvalCount = latestReviews.filter(r => r.state === 'APPROVED').length;
   const hasChanges = latestReviews.some(r => r.state === 'CHANGES_REQUESTED');
   const buildFailed = pr.buildStatus?.state === 'failure';
@@ -73,7 +72,7 @@ function getStatusBadge(pr) {
     return `<span class="rr-badge rr-badge-blocked"><span class="rr-badge-dot"></span>${escapeHtml(reason)}</span>`;
   }
   if (approvalCount >= 2) return `<span class="rr-badge rr-badge-approved"><span class="rr-badge-dot"></span>Approved</span>`;
-  if (reviews.length > 0) return `<span class="rr-badge rr-badge-review"><span class="rr-badge-dot"></span>Awaiting approval</span>`;
+  if (latestReviews.length > 0) return `<span class="rr-badge rr-badge-review"><span class="rr-badge-dot"></span>Awaiting approval</span>`;
   if (pr.draft) return `<span class="rr-badge rr-badge-draft"><span class="rr-badge-dot"></span>Draft</span>`;
   return `<span class="rr-badge rr-badge-open"><span class="rr-badge-dot"></span>Open</span>`;
 }
@@ -101,28 +100,7 @@ function getBuildText(buildStatus) {
 }
 
 function getStatusText(pr) {
-  const reviews = pr.reviews || [];
-  
-  // Group reviews by reviewer and get the most recent APPROVED or CHANGES_REQUESTED from each
-  // (ignore COMMENTED reviews as they don't affect approval status)
-  const reviewsByUser = {};
-  reviews.forEach(review => {
-    const userName = review.user?.login;
-    if (!userName) return;
-    
-    // Only track APPROVED and CHANGES_REQUESTED states
-    if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED') return;
-    
-    if (!reviewsByUser[userName] || 
-        new Date(review.submitted_at || review.created_at) > 
-        new Date(reviewsByUser[userName].submitted_at || reviewsByUser[userName].created_at)) {
-      reviewsByUser[userName] = review;
-    }
-  });
-  
-  // Get the consolidated list of most-recent reviews
-  const latestReviews = Object.values(reviewsByUser);
-  
+  const latestReviews = getConsolidatedReviews(pr);
   const approvalCount = latestReviews.filter(r => r.state === 'APPROVED').length;
   const hasChanges = latestReviews.some(r => r.state === 'CHANGES_REQUESTED');
   const buildFailed = pr.buildStatus?.state === 'failure';
@@ -168,6 +146,16 @@ export function renderTable() {
     filteredPRs = filteredPRs.filter(
       (pr) => (pr.user?.login || '') !== state.currentUser,
     );
+  } else if (state.currentFilter === 'approved') {
+    filteredPRs = filteredPRs.filter((pr) =>
+      getConsolidatedApprovalCount(pr) >= 2,
+    );
+  } else if (state.currentFilter === 'blocked') {
+    filteredPRs = filteredPRs.filter((pr) =>
+      pr.buildStatus?.state === 'failure' ||
+      pr.mergeable_state === 'dirty' ||
+      pr.reviews?.some((r) => r.state === 'CHANGES_REQUESTED'),
+    );
   } else if (state.currentFilter === 'needs-attention') {
     filteredPRs = filteredPRs.filter((pr) => {
       const isNotByMe = (pr.user?.login || '') !== state.currentUser;
@@ -190,6 +178,18 @@ export function renderTable() {
         return aDate - bDate;
       });
     }
+  }
+
+  // Apply field filters (label, status)
+  if (state.activeFilters.label) {
+    filteredPRs = filteredPRs.filter((pr) =>
+      pr.labels?.some((l) => l.name === state.activeFilters.label),
+    );
+  }
+  if (state.activeFilters.status) {
+    filteredPRs = filteredPRs.filter((pr) =>
+      getStatusText(pr) === state.activeFilters.status,
+    );
   }
 
   filteredPRs.sort((a, b) => {
@@ -287,6 +287,10 @@ export function renderTable() {
           aVal = a.labels?.length || 0;
           bVal = b.labels?.length || 0;
           break;
+        case 'created':
+          aVal = new Date(a.created_at || 0).getTime();
+          bVal = new Date(b.created_at || 0).getTime();
+          break;
         case 'updated':
           aVal = new Date(a.updated_at || 0).getTime();
           bVal = new Date(b.updated_at || 0).getTime();
@@ -311,56 +315,52 @@ export function renderTable() {
 
   document.querySelectorAll('#prTable th').forEach((th) => {
     th.classList.remove('sorted-asc', 'sorted-desc');
-    const match = th.textContent.match(/^(.+?)\s*\(\d+\s*[↑↓]\)$/);
-    if (match) {
-      th.textContent = match[1];
-    }
   });
 
-  state.currentSort.forEach((sort, index) => {
+  if (state.currentSort.length === 1) {
+    const sort = state.currentSort[0];
     const headers = Array.from(document.querySelectorAll('#prTable th')).filter(
       (th) => {
         const text = th.textContent.toLowerCase();
-        return (
-          sort.column === text.replace(/\s*\(\d+\s*[↑↓]\)$/, '').toLowerCase()
-        );
+        return sort.column === text.toLowerCase();
       },
     );
     if (headers.length > 0) {
-      const header = headers[0];
-      const arrow = sort.direction === 'asc' ? '↑' : '↓';
-      header.textContent += ` (${index + 1} ${arrow})`;
-      header.classList.add(
+      headers[0].classList.add(
         sort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc',
       );
     }
-  });
+  }
 
   const totalCountEl = document.getElementById('totalCount');
   if (totalCountEl) totalCountEl.textContent = state.allPRs.length;
 
   if (filteredPRs.length === 0) {
     const hasPat = !!localStorage.getItem('github-pat');
-    const hasRepos = state.selectedRepos.size > 0;
-    let title, message;
+    const savedRepos = JSON.parse(localStorage.getItem('github-repos') || '[]');
+    const hasRepos = savedRepos.length > 0 || state.selectedRepos.size > 0;
+    let title, message, actionHtml = '';
     if (!hasPat) {
       title = 'No GitHub PAT';
       message = 'Add a Personal Access Token in settings to start monitoring pull requests.';
+      actionHtml = `<a href="/settings" class="rr-btn-primary" style="text-decoration:none;margin-top:16px;display:inline-block;">Go to Settings →</a>`;
     } else if (!hasRepos) {
       title = 'No Repositories Selected';
-      message = 'Try selecting a repository from the dropdown above.';
+      message = 'Select a repository from the dropdown, or add one in Settings.';
+      actionHtml = `<a href="/settings" class="rr-btn-primary" style="text-decoration:none;margin-top:16px;display:inline-block;">Add Repository →</a>`;
     } else {
       title = 'No Pull Requests Found';
       message = 'Try adjusting your filters or load PRs from a different repository.';
     }
     tbody.innerHTML = `
       <tr>
-        <td colspan="9" style="padding:64px 32px;text-align:center;color:var(--muted-dim);">
+        <td colspan="10" style="padding:64px 32px;text-align:center;color:var(--muted-dim);">
           <div style="margin:0 auto 16px;width:48px;height:48px;border-radius:50%;background:var(--cyan-dim);display:flex;align-items:center;justify-content:center;">
             <svg style="color:var(--cyan);" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           </div>
           <p style="font-family:'Space Mono',monospace;font-size:13px;color:var(--text-primary);margin-bottom:6px;">${title}</p>
           <p style="font-size:12px;color:var(--muted-dim);">${message}</p>
+          ${actionHtml}
         </td>
       </tr>
     `;
@@ -392,7 +392,7 @@ export function renderTable() {
 
       const labelsHTML = pr.labels && pr.labels.length > 0
         ? pr.labels.map(label =>
-            `<span class="inline-block rounded px-2 py-[3px] text-[10px] font-medium mr-1 mb-0.5 border border-border-faint" style="background-color:#${label.color}22;color:#${label.color}">${escapeHtml(label.name)}</span>`
+            `<span class="inline-block rounded px-2 py-[3px] text-[10px] font-medium mr-1 mb-0.5 border border-border-faint rr-label-clickable" style="background-color:#${label.color}33;border-color:#${label.color}44;" onclick="filterByLabel('${escapeHtml(label.name)}');event.stopPropagation();" title="Filter by label"><span class="rr-label-text">${escapeHtml(label.name)}</span></span>`
           ).join('')
         : '<span class="rr-build-na">—</span>';
 
@@ -415,17 +415,20 @@ export function renderTable() {
             title="Details">⋯</button>
         </td>
         <td style="padding:11px 12px;vertical-align:middle;">${getAuthorAvatar(authorLogin, pr.user?.avatar_url)}</td>
-        <td style="padding:11px 12px;vertical-align:middle;">${getStatusBadge(pr)}</td>
+        <td style="padding:11px 12px;vertical-align:middle;"><span class="rr-status-clickable" onclick="filterByStatus('${escapeHtml(getStatusText(pr))}');event.stopPropagation();" title="Filter by status">${getStatusBadge(pr)}</span></td>
         <td style="padding:11px 12px;vertical-align:middle;text-align:center;font-size:16px;">${userAction}</td>
         <td style="padding:11px 12px;vertical-align:middle;text-align:center;">${approvalsDisplay}</td>
         <td style="padding:11px 12px;vertical-align:middle;text-align:center;">${commentsDisplay}</td>
         <td style="padding:11px 12px;vertical-align:middle;max-width:180px;word-wrap:break-word;overflow-wrap:break-word;">${labelsHTML}</td>
         <td style="padding:11px 12px;vertical-align:middle;">${getBuildText(buildStatus)}</td>
+        <td style="padding:11px 12px;vertical-align:middle;" class="rr-age">${formatLastUpdated(pr.created_at)}</td>
         <td style="padding:11px 12px;vertical-align:middle;" class="rr-age">${formatLastUpdated(pr.updated_at)}</td>
       </tr>
     `;
     })
     .join('');
+
+  renderActiveFilters();
 }
 
 export function updateStats() {
@@ -436,7 +439,8 @@ export function updateStats() {
     return state.selectedRepos.has(repoName);
   });
   const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  setEl('statApproved', visiblePRs.filter(pr => pr.reviews?.some(r => r.state === 'APPROVED')).length);
+  setEl('statMine', visiblePRs.filter(pr => (pr.user?.login || '') === state.currentUser).length);
+  setEl('statApproved', visiblePRs.filter(pr => getConsolidatedApprovalCount(pr) >= 2).length);
   setEl('statNeedsAttention', visiblePRs.filter(pr => {
     const isNotByMe = (pr.user?.login || '') !== state.currentUser;
     const isNotDraft = !pr.draft;
@@ -454,13 +458,17 @@ export function updateStats() {
 }
 
 export function sortTable(column) {
-  const existingIndex = state.currentSort.findIndex((s) => s.column === column);
-
-  if (existingIndex !== -1) {
-    state.currentSort[existingIndex].direction =
-      state.currentSort[existingIndex].direction === 'asc' ? 'desc' : 'asc';
+  if (state.currentSort.length === 1 && state.currentSort[0].column === column) {
+    // Cycle: asc → desc → unsorted
+    const current = state.currentSort[0];
+    if (current.direction === 'asc') {
+      state.currentSort = [{ column, direction: 'desc' }];
+    } else {
+      state.currentSort = [];
+    }
   } else {
-    state.currentSort.push({ column, direction: 'asc' });
+    // New column sort — discard any existing sort
+    state.currentSort = [{ column, direction: 'asc' }];
   }
   renderTable();
 }
@@ -475,8 +483,57 @@ export function setFilter(filter) {
   document.querySelectorAll('[data-filter]').forEach((btn) => {
     btn.classList.remove('active');
   });
-  document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+  const activeBtn = document.querySelector(`[data-filter="${filter}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
   renderTable();
+}
+
+export function filterByLabel(labelName) {
+  state.activeFilters.label = labelName;
+  state.activeFilters.status = null;
+  renderTable();
+}
+
+export function filterByStatus(statusText) {
+  state.activeFilters.status = statusText;
+  state.activeFilters.label = null;
+  renderTable();
+}
+
+export function clearLabelFilter() {
+  state.activeFilters.label = null;
+  renderTable();
+}
+
+export function clearStatusFilter() {
+  state.activeFilters.status = null;
+  renderTable();
+}
+
+function renderActiveFilters() {
+  const pill = document.getElementById('activeFilterPill');
+  if (!pill) return;
+
+  if (state.activeFilters.label) {
+    pill.innerHTML = `
+      <span class="rr-pill active">
+        Label: ${escapeHtml(state.activeFilters.label)}
+        <button class="rr-filter-pill-close" onclick="clearLabelFilter();event.stopPropagation();" title="Remove label filter">×</button>
+      </span>
+    `;
+    pill.style.display = 'inline-flex';
+  } else if (state.activeFilters.status) {
+    pill.innerHTML = `
+      <span class="rr-pill active">
+        Status: ${escapeHtml(state.activeFilters.status)}
+        <button class="rr-filter-pill-close" onclick="clearStatusFilter();event.stopPropagation();" title="Remove status filter">×</button>
+      </span>
+    `;
+    pill.style.display = 'inline-flex';
+  } else {
+    pill.innerHTML = '';
+    pill.style.display = 'none';
+  }
 }
 
 function getVisiblePRs() {

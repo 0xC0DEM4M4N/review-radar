@@ -14,6 +14,9 @@
     --green: #22c55e;
     --amber: #f59e0b;
     --red: #ef4444;
+    --purple: #a855f7;
+    --purple-dim: rgba(168, 85, 247, 0.08);
+    --purple-mid: rgba(168, 85, 247, 0.2);
     --white: #e8f4f8;
     --muted: rgba(255, 255, 255, 0.45);
     --muted-dim: rgba(255, 255, 255, 0.3);
@@ -38,6 +41,9 @@
     --green: #16a34a;
     --amber: #d97706;
     --red: #dc2626;
+    --purple: #7c3aed;
+    --purple-dim: rgba(124, 58, 237, 0.08);
+    --purple-mid: rgba(124, 58, 237, 0.2);
     --white: #0f172a;
     --muted: rgba(15, 23, 42, 0.5);
     --muted-dim: rgba(15, 23, 42, 0.35);
@@ -458,7 +464,7 @@ html.light-mode .rr-radar-bg {
 /* --- Buttons --- */
 .rr-btn-primary {
   background: var(--cyan);
-  color: rgba(0, 26, 46, 1);
+  color: var(--ink-light);
   border: none;
   border-radius: 999px;
   padding: 8px 18px;
@@ -547,7 +553,7 @@ html.light-mode .rr-interval-input { background: rgba(0, 0, 0, 0.04); border-col
 /* --- Stats grid --- */
 .rr-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -559,6 +565,25 @@ html.light-mode .rr-interval-input { background: rgba(0, 0, 0, 0.04); border-col
   border: 0.5px solid var(--border-faint);
   border-radius: 10px;
   padding: 14px 16px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.rr-stat[data-filter] {
+  cursor: pointer;
+}
+.rr-stat[data-filter]:hover {
+  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.03);
+}
+.rr-stat.active {
+  border-color: var(--cyan-mid);
+  background: var(--cyan-dim);
+}
+html.light-mode .rr-stat[data-filter]:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+html.light-mode .rr-stat.active {
+  border-color: var(--cyan-mid);
+  background: var(--cyan-dim);
 }
 
 .rr-stat-label {
@@ -609,6 +634,48 @@ html.light-mode .rr-interval-input { background: rgba(0, 0, 0, 0.04); border-col
 html.light-mode .rr-pill { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.45); }
 html.light-mode .rr-pill:hover { background: rgba(0,0,0,0.07); color: rgba(0,0,0,0.75); }
 html.light-mode .rr-pill.active { background: var(--cyan-dim); border-color: var(--cyan-mid); color: var(--cyan); }
+
+/* Active filter pill close button */
+.rr-filter-pill-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+.rr-filter-pill-close:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+html.light-mode .rr-filter-pill-close:hover { background: rgba(0,0,0,0.1); }
+
+/* Clickable labels and status badges in table */
+.rr-label-clickable,
+.rr-status-clickable {
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.rr-label-clickable:hover,
+.rr-status-clickable:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
+/* Label text in table — ensure readability in both modes */
+.rr-label-text {
+  color: var(--text-primary);
+}
+html.light-mode .rr-label-text {
+  color: var(--text-primary);
+}
 
 .rr-sort-label {
   background: rgba(255, 255, 255, 0.04);
@@ -758,7 +825,12 @@ html.light-mode .rr-table-wrap tbody tr:hover { background: rgba(8, 145, 178, 0.
 .rr-badge-approved { background: rgba(34,197,94,0.12); color: var(--green); border-color: rgba(34,197,94,0.25); }
 .rr-badge-blocked { background: rgba(239,68,68,0.12); color: var(--red); border-color: rgba(239,68,68,0.25); }
 .rr-badge-draft { background: rgba(255,255,255,0.04); color: var(--muted); border-color: var(--border-faint); }
-html.light-mode .rr-badge-draft { background: rgba(0,0,0,0.04); border-color: var(--border-faint); }
+
+html.light-mode .rr-badge-open { background: rgba(8, 145, 178, 0.08); color: var(--cyan); border-color: rgba(8, 145, 178, 0.2); }
+html.light-mode .rr-badge-review { background: rgba(217, 119, 6, 0.08); color: var(--amber); border-color: rgba(217, 119, 6, 0.2); }
+html.light-mode .rr-badge-approved { background: rgba(22, 163, 74, 0.08); color: var(--green); border-color: rgba(22, 163, 74, 0.2); }
+html.light-mode .rr-badge-blocked { background: rgba(220, 38, 38, 0.08); color: var(--red); border-color: rgba(220, 38, 38, 0.2); }
+html.light-mode .rr-badge-draft { background: rgba(0,0,0,0.04); color: var(--muted); border-color: var(--border-faint); }
 
 /* Build status */
 .rr-build-ok  { color: var(--green);  font-size: 12px; font-family: 'Space Mono', monospace; }
@@ -800,4 +872,73 @@ html.light-mode .rr-badge-draft { background: rgba(0,0,0,0.04); border-color: va
 html.light-mode #prDrawerDescription img,
 html.light-mode #prDrawerComments img {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Prose content in PR drawer — ensure theme-aware text colors */
+#prDrawerDescription.prose,
+#prDrawerComments .prose {
+  color: var(--text-primary);
+}
+
+#prDrawerDescription.prose p,
+#prDrawerComments .prose p,
+#prDrawerDescription.prose li,
+#prDrawerComments .prose li,
+#prDrawerDescription.prose strong,
+#prDrawerComments .prose strong,
+#prDrawerDescription.prose em,
+#prDrawerComments .prose em {
+  color: var(--text-primary);
+}
+
+#prDrawerDescription.prose h1,
+#prDrawerDescription.prose h2,
+#prDrawerDescription.prose h3,
+#prDrawerDescription.prose h4,
+#prDrawerComments .prose h1,
+#prDrawerComments .prose h2,
+#prDrawerComments .prose h3,
+#prDrawerComments .prose h4 {
+  color: var(--text-primary);
+}
+
+#prDrawerDescription.prose code,
+#prDrawerComments .prose code {
+  color: var(--text-primary);
+  background: var(--border-faint);
+}
+
+#prDrawerDescription.prose pre,
+#prDrawerComments .prose pre {
+  background: var(--ink-light);
+  border: 0.5px solid var(--border-faint);
+}
+
+#prDrawerDescription.prose pre code,
+#prDrawerComments .prose pre code {
+  background: transparent;
+}
+
+#prDrawerDescription.prose a,
+#prDrawerComments .prose a {
+  color: var(--cyan);
+}
+
+#prDrawerDescription.prose blockquote,
+#prDrawerComments .prose blockquote {
+  border-left-color: var(--border-subtle);
+  color: var(--muted);
+}
+
+#prDrawerDescription.prose hr,
+#prDrawerComments .prose hr {
+  border-color: var(--border-faint);
+}
+
+#prDrawerDescription.prose table th,
+#prDrawerDescription.prose table td,
+#prDrawerComments .prose table th,
+#prDrawerComments .prose table td {
+  border-color: var(--border-faint);
+  color: var(--text-primary);
 }

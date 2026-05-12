@@ -25,7 +25,11 @@ import {
   openPRDrawer,
   closePRDrawer,
 } from './ui.js';
-import { setFilter, clearSort, sortTable } from './render.js';
+import {
+  setFilter, clearSort, sortTable,
+  filterByLabel, filterByStatus,
+  clearLabelFilter, clearStatusFilter,
+} from './render.js';
 import {
   toggleRepoDropdown,
   filterRepoList,
@@ -62,6 +66,10 @@ window.closePRDrawer = closePRDrawer;
 window.setFilter = setFilter;
 window.clearSort = clearSort;
 window.sortTable = sortTable;
+window.filterByLabel = filterByLabel;
+window.filterByStatus = filterByStatus;
+window.clearLabelFilter = clearLabelFilter;
+window.clearStatusFilter = clearStatusFilter;
 window.toggleRepoDropdown = toggleRepoDropdown;
 window.filterRepoList = filterRepoList;
 window.selectAllRepos = selectAllRepos;

@@ -3,6 +3,10 @@ export const state = {
   currentUser: null,
   currentFilter: 'all',
   currentSort: [],
+  activeFilters: {
+    label: null,
+    status: null,
+  },
   autoRefreshTimer: null,
   refreshInterval: 5,
   notificationsEnabled: false,

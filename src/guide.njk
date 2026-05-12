@@ -11,6 +11,9 @@ title: ReviewRadar Guide
   <a href="/reports" class="rr-sidebar-icon" title="Reports">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="9" width="3" height="5" rx="1" fill="currentColor"/><rect x="6.5" y="5" width="3" height="9" rx="1" fill="currentColor"/><rect x="11" y="2" width="3" height="12" rx="1" fill="currentColor"/></svg>
   </a>
+  <a href="/historical-data" class="rr-sidebar-icon" title="Historical Data">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+  </a>
   <div class="rr-sidebar-spacer"></div>
   <a href="/settings" class="rr-sidebar-icon" title="Settings">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/></svg>
@@ -79,7 +82,7 @@ title: ReviewRadar Guide
 
     <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
       <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">PR Table</div>
-      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">7-column view showing Author, PR Title, Status, Review Count, Requested Reviewers, Time since update, and Actions. Click any column header to sort.</p>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">9-column view showing Pull Request, Author, Status, My Action, Approvals, Comments, Labels, Build, and Updated time. Click any column header to sort. Click a <strong style="color:var(--text-primary);">label</strong> or <strong style="color:var(--text-primary);">status badge</strong> in any row to instantly filter the table by that value.</p>
     </div>
 
     <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
@@ -87,9 +90,14 @@ title: ReviewRadar Guide
       <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Quick overview of total PRs, awaiting review, approved, and changes requested counts.</p>
     </div>
 
-    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;margin-bottom:12px;">
       <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Status Badges</div>
-      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Visual indicators: Green (approved), Orange (changes requested), Cyan (in review), Gray (awaiting review).</p>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Visual indicators: Green (approved), Orange (changes requested), Cyan (in review), Gray (awaiting review). <strong style="color:var(--text-primary);">Click any badge</strong> to filter the table by that status.</p>
+    </div>
+
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:12px;">Click-to-Filter</div>
+      <p style="margin:0;color:var(--muted);line-height:1.7;font-size:14px;">Click any <strong style="color:var(--text-primary);">label</strong> or <strong style="color:var(--text-primary);">status badge</strong> in the PR table to filter by that value. An active filter pill appears in the filter bar — click the × to remove it. Only one field filter is active at a time, and it stacks with the stat cards (Total PRs / Mine / Needs Attention / Approved / Blocked).</p>
     </div>
   </div>
 
@@ -180,6 +188,7 @@ title: ReviewRadar Guide
     <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
       <ul style="margin:0;padding-left:20px;color:var(--muted);line-height:1.8;font-size:14px;">
         <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Sort PRs:</strong> Click any column header to sort by that field</li>
+        <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Click-to-Filter:</strong> Click any label or status badge in the table to filter by that value</li>
         <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Filter by Status:</strong> Use status pills below the toolbar to view specific PR states</li>
         <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Multiple Repos:</strong> Monitor several repositories to track your entire team's work</li>
         <li style="margin-bottom:10px;"><strong style="color:var(--text-primary);">Reports Page:</strong> View trends and metrics across all repositories</li>

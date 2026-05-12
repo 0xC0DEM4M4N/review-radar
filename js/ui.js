@@ -29,6 +29,20 @@ export function scrollToHowItWorks() {
   window.location.href = '/#how-it-works';
 }
 
+function showTypingLoader() {
+  const loader = document.getElementById('typingLoader');
+  const table = document.querySelector('.rr-table-wrap');
+  if (loader) loader.style.display = 'flex';
+  if (table) table.style.display = 'none';
+}
+
+function hideTypingLoader() {
+  const loader = document.getElementById('typingLoader');
+  const table = document.querySelector('.rr-table-wrap');
+  if (loader) loader.style.display = 'none';
+  if (table) table.style.display = '';
+}
+
 export async function loadPRs() {
   const patElem = document.getElementById('patInput');
   state.pat = patElem ? patElem.value.trim() : '';
@@ -45,6 +59,9 @@ export async function loadPRs() {
   button.disabled = true;
   if (icon) icon.classList.add('hidden');
   if (spinner) spinner.classList.remove('hidden');
+  showTypingLoader();
+  const loadStartTime = Date.now();
+  const MIN_LOAD_TIME = 1500;
 
   try {
     const userResponse = await fetch('https://api.github.com/user', {
@@ -147,11 +164,21 @@ export async function loadPRs() {
     showMessage('Error: ' + errorMsg, 'error');
     console.error(error);
   } finally {
-    button.disabled = false;
-    const icon = document.getElementById('loadIcon');
-    const spinner = document.getElementById('loadSpinner');
-    if (icon) icon.classList.remove('hidden');
-    if (spinner) spinner.classList.add('hidden');
+    const elapsed = Date.now() - loadStartTime;
+    const remaining = Math.max(0, MIN_LOAD_TIME - elapsed);
+    const finish = () => {
+      button.disabled = false;
+      const icon = document.getElementById('loadIcon');
+      const spinner = document.getElementById('loadSpinner');
+      if (icon) icon.classList.remove('hidden');
+      if (spinner) spinner.classList.add('hidden');
+      hideTypingLoader();
+    };
+    if (remaining > 0) {
+      setTimeout(finish, remaining);
+    } else {
+      finish();
+    }
   }
 }
 
@@ -549,6 +576,10 @@ export function saveRepo(repoName) {
     repos.push(repoName);
     localStorage.setItem('github-repos', JSON.stringify(repos));
   }
+  // Auto-select newly added repos
+  state.selectedRepos.add(repoName);
+  const currentSelections = Array.from(state.selectedRepos);
+  localStorage.setItem('selected-repos', JSON.stringify(currentSelections));
 }
 
 export function savePatToken() {
@@ -750,15 +781,14 @@ export function initializeApp() {
   }
 
   const savedTheme = localStorage.getItem('reviewradar-theme');
-  if (savedTheme === 'light') {
+  const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+  const effectiveTheme = savedTheme || (prefersLight ? 'light' : 'dark');
+  if (effectiveTheme === 'light') {
     document.documentElement.classList.add('light-mode');
     document.documentElement.classList.remove('dark-mode');
   } else {
     document.documentElement.classList.add('dark-mode');
     document.documentElement.classList.remove('light-mode');
-    if (!savedTheme) {
-      localStorage.setItem('reviewradar-theme', 'dark');
-    }
   }
   updateThemeIcon();
 
@@ -766,11 +796,12 @@ export function initializeApp() {
 
   loadSavedRepos();
 
-  // Auto-load PRs if PAT exists (with no repos selected = all repos)
-  if (savedPat) {
+  // Auto-load PRs if PAT exists and we're on the dashboard page
+  const isDashboard = document.getElementById('prTable') !== null;
+  if (savedPat && isDashboard) {
     state.pat = savedPat;
     loadPRs();
-  } else {
+  } else if (isDashboard) {
     // No PAT — render the appropriate empty state
     renderTable();
   }
@@ -838,7 +869,7 @@ export function openPRDrawer(prId) {
     const imgs = div.querySelectorAll('img');
     imgs.forEach(img => {
       const placeholder = document.createElement('div');
-      placeholder.style.cssText = 'background:rgba(255,255,255,0.05);border:1px dashed var(--border-faint);border-radius:8px;padding:12px;margin:12px 0;color:var(--muted);font-size:12px;text-align:center;font-style:italic;';
+      placeholder.style.cssText = 'background:var(--border-faint);border:1px dashed var(--border-subtle);border-radius:8px;padding:12px;margin:12px 0;color:var(--muted);font-size:12px;text-align:center;font-style:italic;';
       placeholder.textContent = 'media not available';
       img.replaceWith(placeholder);
     });
@@ -847,7 +878,7 @@ export function openPRDrawer(prId) {
     const videos = div.querySelectorAll('video');
     videos.forEach(video => {
       const placeholder = document.createElement('div');
-      placeholder.style.cssText = 'background:rgba(255,255,255,0.05);border:1px dashed var(--border-faint);border-radius:8px;padding:12px;margin:12px 0;color:var(--muted);font-size:12px;text-align:center;font-style:italic;';
+      placeholder.style.cssText = 'background:var(--border-faint);border:1px dashed var(--border-subtle);border-radius:8px;padding:12px;margin:12px 0;color:var(--muted);font-size:12px;text-align:center;font-style:italic;';
       placeholder.textContent = 'media not available';
       video.replaceWith(placeholder);
     });
@@ -906,7 +937,7 @@ export function openPRDrawer(prId) {
   allComments.sort((a, b) => new Date(a.date) - new Date(b.date));
 
   if (allComments.length === 0) {
-    commentsContainer.innerHTML = '<p class="text-white/30 italic">No comments or reviews yet</p>';
+    commentsContainer.innerHTML = '<p class="text-muted-dim italic">No comments or reviews yet</p>';
   } else {
     import('marked').then(({ marked }) => {
       // Configure marked to render HTML and images properly
@@ -917,7 +948,7 @@ export function openPRDrawer(prId) {
       commentsContainer.innerHTML = allComments.map(c => {
         const date = new Date(c.date);
         const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const badge = c.type === 'review' ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,0.2);color:#22c55e;font-size:10px;font-weight:bold;">${c.state}</span>` : '';
+        const badge = c.type === 'review' ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:4px;background:var(--green);color:var(--ink-light);font-size:10px;font-weight:bold;">${c.state}</span>` : '';
         const bodyHtml = marked(c.body || '');
         const cleanBodyHtml = stripMediaFromHtml(bodyHtml);
         return `
@@ -927,7 +958,7 @@ export function openPRDrawer(prId) {
               <span style="font-size:11px;color:var(--muted);">${dateStr}</span>
               ${badge}
             </div>
-            <div style="color:var(--text-primary)/80;font-size:12px;line-height:1.5;word-break:break-word;" class="prose prose-invert prose-p:my-1 prose-headings:my-2 prose-code:bg-black/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-black/30 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs">${cleanBodyHtml}</div>
+            <div class="prose dark:prose-invert text-sm leading-relaxed break-words prose-p:my-1 prose-headings:my-2 prose-code:bg-black/10 dark:prose-code:bg-black/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-black/10 dark:prose-pre:bg-black/30 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs">${cleanBodyHtml}</div>
           </div>
         `;
       }).join('');

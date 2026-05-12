@@ -7,6 +7,14 @@
   <title>{{ title }}</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <script>
+    (function() {
+      var saved = localStorage.getItem('reviewradar-theme');
+      var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      var theme = saved || (prefersLight ? 'light' : 'dark');
+      if (theme === 'light') document.documentElement.classList.add('light-mode');
+    })();
+  </script>
   <link rel="stylesheet" href="/styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
@@ -37,8 +45,10 @@
       <li><a href="/" class="text-[13px] text-white/50 no-underline transition-colors duration-150 hover:text-text-primary">Home</a></li>
       <li><a href="/guide" class="text-[13px] text-white/50 no-underline transition-colors duration-150 hover:text-text-primary">Guide</a></li>
     </ul>
+    {% if page.url != '/dashboard/' %}
     <a href="/dashboard"
       class="cursor-pointer rounded-full border-none bg-cyan px-5 py-2 font-space-mono text-xs font-bold text-ink-light no-underline transition-opacity duration-150 hover:opacity-85">Open Dashboard →</a>
+    {% endif %}
     <button id="themeToggle"
       class="cursor-pointer rounded-full border border-border-subtle bg-transparent px-3 py-[7px] font-space-mono text-[11px] text-muted"
       onclick="toggleTheme()" title="Dark mode — click for light">🌙</button>

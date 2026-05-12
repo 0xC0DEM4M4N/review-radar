@@ -12,9 +12,11 @@ title: ReviewRadar Reports
   <a href="/reports" class="rr-sidebar-icon active" title="Reports">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="9" width="3" height="5" rx="1" fill="currentColor"/><rect x="6.5" y="5" width="3" height="9" rx="1" fill="currentColor"/><rect x="11" y="2" width="3" height="12" rx="1" fill="currentColor"/></svg>
   </a>
-  <div class="rr-sidebar-spacer"></div>
+  <a href="/historical-data" class="rr-sidebar-icon" title="Historical Data">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+  </a>
   <a href="/settings" class="rr-sidebar-icon" title="Settings">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/></svg>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/></svg>
   </a>
 </aside>
 
@@ -60,8 +62,24 @@ title: ReviewRadar Reports
     <a href="/settings" class="rr-btn-primary" style="text-decoration:none;">Go to Settings</a>
   </div>
 
+  <!-- No repos state -->
+  <div id="reportsNoRepos" style="display:none;text-align:center;padding:80px 32px;">
+    <div style="width:56px;height:56px;border-radius:50%;background:var(--cyan-dim);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+      <svg style="color:var(--cyan);" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+    </div>
+    <p style="font-family:'Space Mono',monospace;font-size:14px;color:var(--text-primary);margin-bottom:8px;">No repositories selected</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Add repositories in Settings to start tracking pull requests.</p>
+    <a href="/settings" class="rr-btn-primary" style="text-decoration:none;">Add Repositories →</a>
+  </div>
+
+  <!-- Typing Loader -->
+  <div id="typingLoader" style="display:none;align-items:center;justify-content:center;padding:80px 32px;flex-direction:column;">
+    <img src="/assets/typing-dev.svg" width="240" height="160" alt="Loading..." style="max-width:100%;height:auto;">
+    <p style="font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);margin-top:16px;letter-spacing:0.05em;">Fetching data...</p>
+  </div>
+
   <!-- Main content grid -->
-  <div id="reportsGrid" style="display:none;display:grid;grid-template-columns:1fr;gap:16px;max-width:100%;">
+  <div id="reportsGrid" style="display:none;grid-template-columns:1fr;gap:16px;max-width:100%;">
 
     <!-- Top Metrics Row: Total PRs, Approved, Failing Builds -->
     <h3 class="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Overview</h3>
@@ -145,7 +163,9 @@ title: ReviewRadar Reports
 (function() {
   const CHART_COLORS = ['#22d3ee','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#10b981','#f97316'];
 
-  const theme = localStorage.getItem('reviewradar-theme') || 'dark';
+  const savedTheme = localStorage.getItem('reviewradar-theme');
+  const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+  const theme = savedTheme || (prefersLight ? 'light' : 'dark');
   if (theme === 'light') {
     document.documentElement.classList.add('light-mode');
     Chart.defaults.color = 'rgba(0,0,0,0.5)';
@@ -175,8 +195,12 @@ title: ReviewRadar Reports
   function setLoading(on) {
     const btn = document.getElementById('reportsRefreshBtn');
     const icon = document.getElementById('reportsRefreshIcon');
+    const loader = document.getElementById('typingLoader');
+    const grid = document.getElementById('reportsGrid');
     if (btn) btn.disabled = on;
     if (icon) icon.style.opacity = on ? '0.5' : '1';
+    if (loader) loader.style.display = on ? 'flex' : 'none';
+    if (grid && on) grid.style.display = 'none';
   }
 
   async function ghFetch(url, pat) {
@@ -495,28 +519,24 @@ title: ReviewRadar Reports
     let cached = [];
     try { cached = raw ? JSON.parse(raw) : []; } catch(e) {}
 
-    // If we have cached data, show it immediately and hide error states
-    if (cached.length > 0) {
+    // If we have cached data and no PAT, show it immediately
+    if (cached.length > 0 && !pat) {
       const filteredCached = filterPRsBySelectedRepos(cached);
       if (filteredCached.length > 0) {
         document.getElementById('reportsNoData').style.display = 'none';
         document.getElementById('reportsNoPat').style.display = 'none';
+        document.getElementById('reportsNoRepos').style.display = 'none';
         document.getElementById('reportsGrid').style.display = 'grid';
         showData(filteredCached);
         setLoading(false);
-        
-        // If no PAT, just use cached data
-        if (!pat) {
-          setStatus('Using cached data — add a GitHub token in Settings to fetch live data.');
-          return;
-        }
-        
-        // If we have a PAT, try to fetch fresh data in the background
+        setStatus('Using cached data — add a GitHub token in Settings to fetch live data.');
+        return;
       } else {
         // Cached data exists but no repos selected
-        document.getElementById('reportsNoData').style.display = 'block';
-        document.getElementById('reportsGrid').style.display = 'none';
+        document.getElementById('reportsNoData').style.display = 'none';
         document.getElementById('reportsNoPat').style.display = 'none';
+        document.getElementById('reportsNoRepos').style.display = 'block';
+        document.getElementById('reportsGrid').style.display = 'none';
         setLoading(false);
         return;
       }
@@ -525,6 +545,15 @@ title: ReviewRadar Reports
       setLoading(false);
       document.getElementById('reportsNoData').style.display = 'none';
       document.getElementById('reportsNoPat').style.display = 'block';
+      document.getElementById('reportsNoRepos').style.display = 'none';
+      document.getElementById('reportsGrid').style.display = 'none';
+      return;
+    } else if (getSelectedRepos().length === 0 && getStoredRepos().length === 0) {
+      // Has PAT but no repos
+      setLoading(false);
+      document.getElementById('reportsNoData').style.display = 'none';
+      document.getElementById('reportsNoPat').style.display = 'none';
+      document.getElementById('reportsNoRepos').style.display = 'block';
       document.getElementById('reportsGrid').style.display = 'none';
       return;
     }
@@ -541,12 +570,14 @@ title: ReviewRadar Reports
         }
         document.getElementById('reportsNoData').style.display = 'none';
         document.getElementById('reportsNoPat').style.display = 'none';
+        document.getElementById('reportsNoRepos').style.display = 'none';
         document.getElementById('reportsGrid').style.display = 'grid';
         showData(prs);
       } else {
         setStatus('No open PRs found', false);
         document.getElementById('reportsNoData').style.display = 'block';
         document.getElementById('reportsNoPat').style.display = 'none';
+        document.getElementById('reportsNoRepos').style.display = 'none';
         document.getElementById('reportsGrid').style.display = 'none';
       }
     } catch(e) {
@@ -554,6 +585,7 @@ title: ReviewRadar Reports
       setStatus('Error loading data: ' + e.message, true);
       document.getElementById('reportsNoData').style.display = 'block';
       document.getElementById('reportsNoPat').style.display = 'none';
+      document.getElementById('reportsNoRepos').style.display = 'none';
       document.getElementById('reportsGrid').style.display = 'none';
     }
 
@@ -563,6 +595,7 @@ title: ReviewRadar Reports
   function showData(prs) {
     document.getElementById('reportsNoData').style.display = 'none';
     document.getElementById('reportsNoPat').style.display = 'none';
+    document.getElementById('reportsNoRepos').style.display = 'none';
     document.getElementById('reportsGrid').style.display = 'grid';
 
     const repos = [...new Set(prs.map(pr => {
