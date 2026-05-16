@@ -6,6 +6,7 @@ export const state = {
   activeFilters: {
     label: null,
     status: null,
+    author: null,
   },
   autoRefreshTimer: null,
   refreshInterval: 5,
@@ -17,6 +18,8 @@ export const state = {
   repoDropdownOpen: false,
   repoSelectionSnapshot: null,
   prDataMap: {}, // Store PR data by ID for drawer
+  lastLoadedRepos: new Set(),
+  columnOrder: ['title','author','status','myaction','approvals','comments','labels','build','created','updated','details'],
 };
 
 export const REPO_COLORS = [

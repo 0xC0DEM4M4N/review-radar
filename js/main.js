@@ -27,8 +27,8 @@ import {
 } from './ui.js';
 import {
   setFilter, clearSort, sortTable,
-  filterByLabel, filterByStatus,
-  clearLabelFilter, clearStatusFilter,
+  filterByLabel, filterByStatus, filterByAuthor,
+  clearLabelFilter, clearStatusFilter, clearAuthorFilter,
 } from './render.js';
 import {
   toggleRepoDropdown,
@@ -68,8 +68,10 @@ window.clearSort = clearSort;
 window.sortTable = sortTable;
 window.filterByLabel = filterByLabel;
 window.filterByStatus = filterByStatus;
+window.filterByAuthor = filterByAuthor;
 window.clearLabelFilter = clearLabelFilter;
 window.clearStatusFilter = clearStatusFilter;
+window.clearAuthorFilter = clearAuthorFilter;
 window.toggleRepoDropdown = toggleRepoDropdown;
 window.filterRepoList = filterRepoList;
 window.selectAllRepos = selectAllRepos;

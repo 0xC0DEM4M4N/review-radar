@@ -10,8 +10,10 @@ import {
   selectAllRepos,
   clearRepoSelection,
 } from './repoSelector.js';
-import { renderTable, updateStats } from './render.js';
+import { renderTable, updateStats, renderTableHeader } from './render.js';
 import { getRepoFullNameFromUrl } from './utils.js';
+import { initColumnResizer } from './columnResizer.js';
+import { loadColumnConfig } from './columnConfig.js';
 
 export function scrollToFeatures() {
   window.location.href = '/#features';
@@ -52,14 +54,23 @@ export async function loadPRs() {
     return;
   }
 
-  showMessage('Loading PRs...', 'info');
+  const isFirstLoad = state.allPRs.length === 0;
+  const reposChanged = state.lastLoadedRepos.size !== state.selectedRepos.size ||
+    [...state.selectedRepos].some(r => !state.lastLoadedRepos.has(r));
+  const showLoader = isFirstLoad || reposChanged;
+
   const button = document.getElementById('loadButton');
   const icon = document.getElementById('loadIcon');
   const spinner = document.getElementById('loadSpinner');
   button.disabled = true;
   if (icon) icon.classList.add('hidden');
   if (spinner) spinner.classList.remove('hidden');
-  showTypingLoader();
+
+  if (showLoader) {
+    showMessage('Loading PRs...', 'info');
+    showTypingLoader();
+  }
+
   const loadStartTime = Date.now();
   const MIN_LOAD_TIME = 1500;
 
@@ -148,10 +159,16 @@ export async function loadPRs() {
 
     document.getElementById('statsContainer').style.display = 'grid';
     document.getElementById('filterControls').style.display = 'flex';
-    showMessage(
-      `Loaded ${state.allPRs.length} pull requests from ${discoveredRepos.size} repos`,
-      'success',
-    );
+
+    if (showLoader) {
+      showMessage(
+        `Loaded ${state.allPRs.length} pull requests from ${discoveredRepos.size} repos`,
+        'success',
+      );
+    } else {
+      showMessage('Updated', 'success');
+    }
+    state.lastLoadedRepos = new Set(state.selectedRepos);
   } catch (error) {
     let errorMsg = error.message;
     if (
@@ -172,9 +189,11 @@ export async function loadPRs() {
       const spinner = document.getElementById('loadSpinner');
       if (icon) icon.classList.remove('hidden');
       if (spinner) spinner.classList.add('hidden');
-      hideTypingLoader();
+      if (showLoader) {
+        hideTypingLoader();
+      }
     };
-    if (remaining > 0) {
+    if (showLoader && remaining > 0) {
       setTimeout(finish, remaining);
     } else {
       finish();
@@ -367,6 +386,8 @@ async function autoRefreshPRs() {
     renderTable();
     updateStats();
     updateRefreshStatus();
+    showMessage('Updated', 'success');
+    state.lastLoadedRepos = new Set(state.selectedRepos);
   } catch (error) {
     // Silent fail for auto-refresh
   }
@@ -796,8 +817,14 @@ export function initializeApp() {
 
   loadSavedRepos();
 
+  // Load saved column config
+  state.columnOrder = loadColumnConfig();
+
   // Auto-load PRs if PAT exists and we're on the dashboard page
   const isDashboard = document.getElementById('prTable') !== null;
+  if (isDashboard) {
+    renderTableHeader();
+  }
   if (savedPat && isDashboard) {
     state.pat = savedPat;
     loadPRs();
@@ -805,6 +832,9 @@ export function initializeApp() {
     // No PAT — render the appropriate empty state
     renderTable();
   }
+
+  // Make table columns resizable on dashboard
+  initColumnResizer();
 
   document.addEventListener('click', (e) => {
     const selector = document.getElementById('repoSelector');

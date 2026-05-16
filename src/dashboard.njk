@@ -131,21 +131,22 @@ title: ReviewRadar Dashboard
     <table id="prTable">
       <thead>
         <tr>
-          <th class="sortable" onclick="sortTable('title')">Pull request</th>
-          <th class="sortable" onclick="sortTable('author')">Author</th>
-          <th class="sortable" onclick="sortTable('status')">Status</th>
-          <th class="sortable" onclick="sortTable('myaction')">My Action</th>
-          <th class="sortable" onclick="sortTable('approvals')">Approvals</th>
-          <th class="sortable" onclick="sortTable('comments')">Comments</th>
-          <th class="sortable" onclick="sortTable('labels')">Labels</th>
-          <th class="sortable" onclick="sortTable('buildStatus')">Build</th>
-          <th class="sortable" onclick="sortTable('created')">Created</th>
-          <th class="sortable" onclick="sortTable('updated')">Updated</th>
+          <th class="sortable rr-title-header" onclick="sortTable('title')">Pull request</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('author')" style="width: 45px;">Author</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('status')" style="width: 100px;">Status</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('myaction')" style="width: 45px;">My Action</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('approvals')" style="width: 75px;">Approvals</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('comments')" style="width: 75px;">Comments</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('labels')" style="width: 130px;">Labels</th>
+          <th class="sortable" onclick="sortTable('buildStatus')" style="width: 70px;">Build</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('created')" style="width: 60px;">Created</th>
+          <th class="sortable rr-col-narrow" onclick="sortTable('updated')" style="width: 60px;">Updated</th>
+          <th class="rr-col-narrow" style="width: 45px;"></th>
         </tr>
       </thead>
       <tbody id="prTableBody">
         <tr>
-          <td colspan="10" style="padding:64px 32px;text-align:center;color:var(--muted-dim);">
+          <td colspan="20" style="padding:64px 32px;text-align:center;color:var(--muted-dim);">
             <div style="margin:0 auto 16px;width:48px;height:48px;border-radius:50%;background:var(--cyan-dim);display:flex;align-items:center;justify-content:center;">
               <svg style="color:var(--cyan);" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
             </div>

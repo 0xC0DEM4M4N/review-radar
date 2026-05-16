@@ -659,12 +659,14 @@ html.light-mode .rr-filter-pill-close:hover { background: rgba(0,0,0,0.1); }
 
 /* Clickable labels and status badges in table */
 .rr-label-clickable,
-.rr-status-clickable {
+.rr-status-clickable,
+.rr-author-clickable {
   cursor: pointer;
   transition: opacity 0.15s, transform 0.1s;
 }
 .rr-label-clickable:hover,
-.rr-status-clickable:hover {
+.rr-status-clickable:hover,
+.rr-author-clickable:hover {
   opacity: 0.8;
   transform: scale(1.05);
 }
@@ -697,11 +699,10 @@ html.light-mode .rr-sort-label { background: rgba(0,0,0,0.04); border-color: rgb
   overflow: hidden;
   border-radius: 10px;
   border: 0.5px solid var(--border-faint);
-  overflow-x: auto;
   background: var(--ink-light);
 }
 
-.rr-table-wrap table { width: 100%; border-collapse: collapse; }
+.rr-table-wrap table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 
 .rr-table-wrap thead th {
   font-size: 11px;
@@ -716,6 +717,7 @@ html.light-mode .rr-sort-label { background: rgba(0,0,0,0.04); border-color: rgb
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  position: relative;
 }
 
 .rr-table-wrap thead th:hover { background: rgba(34, 211, 238, 0.04); }
@@ -737,6 +739,7 @@ html.light-mode .rr-table-wrap tbody tr:hover { background: rgba(8, 145, 178, 0.
   font-size: 13px;
   color: var(--muted);
   vertical-align: middle;
+  overflow: hidden;
 }
 
 /* PR title cell */
@@ -744,13 +747,17 @@ html.light-mode .rr-table-wrap tbody tr:hover { background: rgba(8, 145, 178, 0.
   color: var(--text-primary);
   font-weight: 500;
   font-size: 13px;
-  max-width: 300px;
+  width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-decoration: none;
   display: block;
   transition: color 0.1s;
+}
+
+.rr-title-header {
+  width: 100%;
 }
 
 .rr-pr-title:hover { color: var(--cyan); text-decoration: underline; }
@@ -842,7 +849,7 @@ html.light-mode .rr-badge-draft { background: rgba(0,0,0,0.04); color: var(--mut
 .rr-reviews { font-size: 12px; color: var(--muted); font-family: 'Space Mono', monospace; }
 
 /* Updated time */
-.rr-age { font-size: 12px; color: var(--muted-dim); font-family: 'Space Mono', monospace; white-space: nowrap; }
+.rr-age { font-size: 12px; color: var(--muted-dim); font-family: 'Space Mono', monospace; }
 
 /* Radar animations */
 @keyframes rr-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -858,6 +865,45 @@ html.light-mode .rr-badge-draft { background: rgba(0,0,0,0.04); color: var(--mut
 
 /* Hide footer on dashboard/settings/reports pages */
 .rr-app-page footer { display: none !important; }
+
+/* Narrow columns for compact data */
+.rr-col-narrow {
+  width: 1%;
+  padding: 11px 6px !important;
+  text-align: center;
+}
+
+.rr-table-wrap thead th.rr-col-narrow {
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+  text-align: center;
+  vertical-align: bottom;
+  white-space: normal;
+}
+
+/* Column resize handles */
+.rr-resize-handle {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.rr-resize-handle:hover,
+.rr-resizing .rr-resize-handle {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+html.light-mode .rr-resize-handle:hover,
+html.light-mode .rr-resizing .rr-resize-handle {
+  background: rgba(0, 0, 0, 0.08);
+}
 
 /* Image rendering in PR drawer */
 #prDrawerDescription img,

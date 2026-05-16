@@ -152,6 +152,20 @@ title: ReviewRadar Settings
     </div>
   </div>
 
+  <!-- Table Columns Section -->
+  <div style="margin-bottom:48px;">
+    <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Table Columns</h2>
+    <div style="background:var(--ink-light);border:0.5px solid var(--border-faint);border-radius:12px;padding:24px;">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px;">Column Layout</div>
+      <p style="font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:16px;">Choose which columns to show and their order on the dashboard table.</p>
+      <div id="settingsColumnList" style="margin-bottom:16px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="settingsSaveColumns()" class="rr-btn-ghost" style="flex:1;justify-content:center;">Save Layout</button>
+        <button onclick="settingsResetColumns()" style="flex:1;background:rgba(239,68,68,0.05);border:0.5px solid rgba(239,68,68,0.2);border-radius:8px;padding:10px 14px;font-size:14px;color:var(--red);cursor:pointer;font-family:'Space Mono',monospace;font-weight:600;">Reset to Defaults</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Data Management Section -->
   <div style="margin-bottom:60px;">
     <h2 style="font-size:28px;font-weight:700;color:var(--text-primary);margin:0 0 20px 0;">Data Management</h2>
@@ -182,6 +196,21 @@ title: ReviewRadar Settings
 
 <script>
 (function() {
+  const COLUMN_DEFS = [
+    { key: 'title', label: 'Pull request' },
+    { key: 'author', label: 'Author' },
+    { key: 'status', label: 'Status' },
+    { key: 'myaction', label: 'My Action' },
+    { key: 'approvals', label: 'Approvals' },
+    { key: 'comments', label: 'Comments' },
+    { key: 'labels', label: 'Labels' },
+    { key: 'build', label: 'Build' },
+    { key: 'created', label: 'Created' },
+    { key: 'updated', label: 'Updated' },
+    { key: 'details', label: 'Details' },
+  ];
+  const DEFAULT_COLUMNS = COLUMN_DEFS.map(c => c.key);
+
   // Load PAT state
   const pat = localStorage.getItem('github-pat');
   if (pat) {
@@ -208,6 +237,9 @@ title: ReviewRadar Settings
 
   // Load repos
   renderSettingsRepos();
+
+  // Load column config
+  renderSettingsColumns();
 
   function updateThemeBtns(t) {
     const dark = document.getElementById('themeDarkBtn');
@@ -291,8 +323,131 @@ title: ReviewRadar Settings
 
   window.settingsClearAll = function() {
     if (!confirm('This will clear your PAT, repos, and all cached data. Continue?')) return;
-    ['github-pat','github-repos','reviewradar-theme','reviewradar-prs','reviewradar-settings','auto-refresh-enabled','refresh-interval','notifications-enabled'].forEach(k => localStorage.removeItem(k));
+    ['github-pat','github-repos','reviewradar-theme','reviewradar-prs','reviewradar-settings','auto-refresh-enabled','refresh-interval','notifications-enabled','reviewradar-columns','reviewradar-column-widths'].forEach(k => localStorage.removeItem(k));
     location.reload();
+  };
+
+  function getColumnConfig() {
+    try {
+      const saved = localStorage.getItem('reviewradar-columns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [...DEFAULT_COLUMNS];
+  }
+
+  function renderSettingsColumns() {
+    const list = document.getElementById('settingsColumnList');
+    const config = getColumnConfig();
+    const availableKeys = COLUMN_DEFS.map(c => c.key);
+
+    // Build ordered list from config, appending any missing defaults at the end
+    const ordered = [];
+    config.forEach(key => {
+      if (availableKeys.includes(key)) ordered.push(key);
+    });
+    availableKeys.forEach(key => {
+      if (!ordered.includes(key)) ordered.push(key);
+    });
+
+    list.innerHTML = ordered.map((key) => {
+      const def = COLUMN_DEFS.find(c => c.key === key);
+      const isVisible = config.includes(key);
+      return `
+        <div class="settings-column-row" draggable="true" data-col-key="${key}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;margin-bottom:4px;background:rgba(255,255,255,0.03);border:0.5px solid var(--border-faint);cursor:grab;">
+          <span class="column-drag-handle" style="cursor:grab;color:var(--muted-dim);font-size:14px;padding:2px 4px;user-select:none;" title="Drag to reorder">☰</span>
+          <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="settingsToggleColumn('${key}')" style="cursor:pointer;width:16px;height:16px;accent-color:var(--cyan);">
+          <span style="flex:1;font-family:'Space Mono',monospace;font-size:12px;color:var(--text-primary);">${def.label}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Attach drag-and-drop handlers
+    let draggedKey = null;
+    list.querySelectorAll('.settings-column-row').forEach(row => {
+      row.addEventListener('dragstart', (e) => {
+        draggedKey = row.dataset.colKey;
+        row.style.opacity = '0.4';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      row.addEventListener('dragend', () => {
+        draggedKey = null;
+        row.style.opacity = '';
+        list.querySelectorAll('.settings-column-row').forEach(r => {
+          r.style.borderTop = '';
+          r.style.borderBottom = '';
+        });
+      });
+
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          row.style.borderTop = '2px solid var(--cyan)';
+          row.style.borderBottom = '';
+        } else {
+          row.style.borderTop = '';
+          row.style.borderBottom = '2px solid var(--cyan)';
+        }
+      });
+
+      row.addEventListener('dragleave', () => {
+        row.style.borderTop = '';
+        row.style.borderBottom = '';
+      });
+
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!draggedKey || draggedKey === row.dataset.colKey) return;
+
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const dropAfter = e.clientY >= midY;
+
+        // Rebuild order
+        const currentConfig = getColumnConfig();
+        const visible = new Set(currentConfig);
+        let newOrder = ordered.filter(k => k !== draggedKey);
+        const targetIdx = newOrder.indexOf(row.dataset.colKey);
+        const insertIdx = dropAfter ? targetIdx + 1 : targetIdx;
+        newOrder.splice(insertIdx, 0, draggedKey);
+
+        // Preserve visibility: visible keys in new order, hidden after
+        const newConfig = newOrder.filter(k => visible.has(k));
+        localStorage.setItem('reviewradar-columns', JSON.stringify(newConfig));
+        renderSettingsColumns();
+      });
+    });
+  };
+
+  function settingsToggleColumn(key) {
+    const config = getColumnConfig();
+    if (config.includes(key)) {
+      const idx = config.indexOf(key);
+      config.splice(idx, 1);
+    } else {
+      config.push(key);
+    }
+    localStorage.setItem('reviewradar-columns', JSON.stringify(config));
+    renderSettingsColumns();
+  };
+
+  // Drag-and-drop replaced the old settingsMoveColumn function
+
+  function settingsSaveColumns() {
+    showSettingsMsg('Column layout saved', 'success');
+  };
+
+  function settingsResetColumns() {
+    localStorage.removeItem('reviewradar-columns');
+    localStorage.removeItem('reviewradar-column-widths');
+    renderSettingsColumns();
+    showSettingsMsg('Columns reset to defaults', 'success');
   };
 
   window.settingsSetTheme = function(t) {
@@ -334,5 +489,10 @@ title: ReviewRadar Settings
   }
 
   window.renderSettingsRepos = renderSettingsRepos;
+  window.renderSettingsColumns = renderSettingsColumns;
+  window.settingsToggleColumn = settingsToggleColumn;
+  window.settingsMoveColumn = settingsMoveColumn;
+  window.settingsSaveColumns = settingsSaveColumns;
+  window.settingsResetColumns = settingsResetColumns;
 })();
 </script>

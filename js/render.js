@@ -1,11 +1,12 @@
 import { state } from './state.js';
 import {
   escapeHtml,
-  formatLastUpdated,
+  formatDateSplit,
   getRepoNameFromUrl,
   getRepoFullNameFromUrl,
 } from './utils.js';
 import { getRepoColorIndex } from './repoSelector.js';
+import { COLUMN_META } from './columnConfig.js';
 
 function getReviewSummary(pr) {
   const reviews = pr.reviews || [];
@@ -180,7 +181,7 @@ export function renderTable() {
     }
   }
 
-  // Apply field filters (label, status)
+  // Apply field filters (label, status, author)
   if (state.activeFilters.label) {
     filteredPRs = filteredPRs.filter((pr) =>
       pr.labels?.some((l) => l.name === state.activeFilters.label),
@@ -189,6 +190,11 @@ export function renderTable() {
   if (state.activeFilters.status) {
     filteredPRs = filteredPRs.filter((pr) =>
       getStatusText(pr) === state.activeFilters.status,
+    );
+  }
+  if (state.activeFilters.author) {
+    filteredPRs = filteredPRs.filter((pr) =>
+      (pr.user?.login || '') === state.activeFilters.author,
     );
   }
 
@@ -320,10 +326,7 @@ export function renderTable() {
   if (state.currentSort.length === 1) {
     const sort = state.currentSort[0];
     const headers = Array.from(document.querySelectorAll('#prTable th')).filter(
-      (th) => {
-        const text = th.textContent.toLowerCase();
-        return sort.column === text.toLowerCase();
-      },
+      (th) => th.dataset.col === sort.column,
     );
     if (headers.length > 0) {
       headers[0].classList.add(
@@ -352,9 +355,10 @@ export function renderTable() {
       title = 'No Pull Requests Found';
       message = 'Try adjusting your filters or load PRs from a different repository.';
     }
+    const emptyColspan = state.columnOrder.length || 11;
     tbody.innerHTML = `
       <tr>
-        <td colspan="10" style="padding:64px 32px;text-align:center;color:var(--muted-dim);">
+        <td colspan="${emptyColspan}" style="padding:64px 32px;text-align:center;color:var(--muted-dim);">
           <div style="margin:0 auto 16px;width:48px;height:48px;border-radius:50%;background:var(--cyan-dim);display:flex;align-items:center;justify-content:center;">
             <svg style="color:var(--cyan);" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           </div>
@@ -401,28 +405,25 @@ export function renderTable() {
       // Store PR data for drawer access
       state.prDataMap[pr.id] = pr;
 
+      const cells = {
+        title: `<td style="padding:11px 12px;vertical-align:middle;"><div><a href="${prUrl}" target="_blank" class="rr-pr-title" title="${escapeHtml(prTitle)}">${escapeHtml(prTitle)}</a>${repoMeta}</div></td>`,
+        author: `<td class="rr-col-narrow" style="vertical-align:middle;"><span class="rr-author-clickable" onclick="filterByAuthor('${escapeHtml(authorLogin)}');event.stopPropagation();" title="Filter by ${escapeHtml(authorLogin)}">${getAuthorAvatar(authorLogin, pr.user?.avatar_url)}</span></td>`,
+        status: `<td class="rr-col-narrow" style="vertical-align:middle;"><span class="rr-status-clickable" onclick="filterByStatus('${escapeHtml(getStatusText(pr))}');event.stopPropagation();" title="Filter by status">${getStatusBadge(pr)}</span></td>`,
+        myaction: `<td class="rr-col-narrow" style="vertical-align:middle;font-size:16px;">${userAction}</td>`,
+        approvals: `<td class="rr-col-narrow" style="vertical-align:middle;">${approvalsDisplay}</td>`,
+        comments: `<td class="rr-col-narrow" style="vertical-align:middle;">${commentsDisplay}</td>`,
+        labels: `<td class="rr-col-narrow" style="vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word;">${labelsHTML}</td>`,
+        build: `<td style="padding:11px 12px;vertical-align:middle;">${getBuildText(buildStatus)}</td>`,
+        created: `<td class="rr-age" style="vertical-align:middle;">${formatDateSplit(pr.created_at)}</td>`,
+        updated: `<td class="rr-age" style="vertical-align:middle;">${formatDateSplit(pr.updated_at)}</td>`,
+        details: `<td class="rr-col-narrow" style="vertical-align:middle;"><button onclick="openPRDrawer('${pr.id}')" style="background:none;border:none;cursor:pointer;padding:6px;color:var(--muted);transition:color 200ms;font-size:16px;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--muted)'" title="more details">⋯</button></td>`,
+      };
+
+      const rowCells = state.columnOrder.map(key => cells[key] || '').join('');
+
       return `
       <tr class="${isOwned ? 'owned-pr' : ''} ${repoBgClass}">
-        <td style="padding:11px 12px;vertical-align:middle;max-width:320px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <div style="flex:1;min-width:0;">
-            <a href="${prUrl}" target="_blank" class="rr-pr-title">${escapeHtml(prTitle)}</a>
-            ${repoMeta}
-          </div>
-          <button onclick="openPRDrawer('${pr.id}')" 
-            style="flex-shrink:0;background:none;border:none;cursor:pointer;padding:6px;color:var(--muted);transition:color 200ms;font-size:16px;" 
-            onmouseover="this.style.color='var(--text-primary)'" 
-            onmouseout="this.style.color='var(--muted)'"
-            title="Details">⋯</button>
-        </td>
-        <td style="padding:11px 12px;vertical-align:middle;">${getAuthorAvatar(authorLogin, pr.user?.avatar_url)}</td>
-        <td style="padding:11px 12px;vertical-align:middle;"><span class="rr-status-clickable" onclick="filterByStatus('${escapeHtml(getStatusText(pr))}');event.stopPropagation();" title="Filter by status">${getStatusBadge(pr)}</span></td>
-        <td style="padding:11px 12px;vertical-align:middle;text-align:center;font-size:16px;">${userAction}</td>
-        <td style="padding:11px 12px;vertical-align:middle;text-align:center;">${approvalsDisplay}</td>
-        <td style="padding:11px 12px;vertical-align:middle;text-align:center;">${commentsDisplay}</td>
-        <td style="padding:11px 12px;vertical-align:middle;max-width:180px;word-wrap:break-word;overflow-wrap:break-word;">${labelsHTML}</td>
-        <td style="padding:11px 12px;vertical-align:middle;">${getBuildText(buildStatus)}</td>
-        <td style="padding:11px 12px;vertical-align:middle;" class="rr-age">${formatLastUpdated(pr.created_at)}</td>
-        <td style="padding:11px 12px;vertical-align:middle;" class="rr-age">${formatLastUpdated(pr.updated_at)}</td>
+        ${rowCells}
       </tr>
     `;
     })
@@ -491,12 +492,26 @@ export function setFilter(filter) {
 export function filterByLabel(labelName) {
   state.activeFilters.label = labelName;
   state.activeFilters.status = null;
+  state.activeFilters.author = null;
   renderTable();
 }
 
 export function filterByStatus(statusText) {
   state.activeFilters.status = statusText;
   state.activeFilters.label = null;
+  state.activeFilters.author = null;
+  renderTable();
+}
+
+export function filterByAuthor(authorLogin) {
+  state.activeFilters.author = authorLogin;
+  state.activeFilters.label = null;
+  state.activeFilters.status = null;
+  renderTable();
+}
+
+export function clearAuthorFilter() {
+  state.activeFilters.author = null;
   renderTable();
 }
 
@@ -527,6 +542,14 @@ function renderActiveFilters() {
       <span class="rr-pill active">
         Status: ${escapeHtml(state.activeFilters.status)}
         <button class="rr-filter-pill-close" onclick="clearStatusFilter();event.stopPropagation();" title="Remove status filter">×</button>
+      </span>
+    `;
+    pill.style.display = 'inline-flex';
+  } else if (state.activeFilters.author) {
+    pill.innerHTML = `
+      <span class="rr-pill active">
+        Author: ${escapeHtml(state.activeFilters.author)}
+        <button class="rr-filter-pill-close" onclick="clearAuthorFilter();event.stopPropagation();" title="Remove author filter">×</button>
       </span>
     `;
     pill.style.display = 'inline-flex';
@@ -699,4 +722,29 @@ export function renderStatusReport() {
     </div>
   `;
   return true;
+}
+
+
+export function renderTableHeader() {
+  const theadRow = document.querySelector('#prTable thead tr');
+  if (!theadRow) return;
+
+  theadRow.innerHTML = state.columnOrder
+    .map((key) => {
+      const meta = COLUMN_META[key];
+      if (!meta) return '';
+
+      const classes = ['sortable'];
+      if (meta.narrow) classes.push('rr-col-narrow');
+      if (meta.titleHeader) classes.push('rr-title-header');
+
+      const widthAttr = meta.width ? `style="width:${meta.width};"` : '';
+      const dataAttr = `data-col="${key}"`;
+
+      if (meta.sortKey) {
+        return `<th class="${classes.join(' ')}" onclick="sortTable('${meta.sortKey}')" ${widthAttr} ${dataAttr}>${meta.label}</th>`;
+      }
+      return `<th class="${classes.join(' ')}" ${widthAttr} ${dataAttr}>${meta.label}</th>`;
+    })
+    .join('');
 }

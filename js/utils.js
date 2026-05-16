@@ -56,6 +56,39 @@ export function formatLastUpdated(isoDateString) {
   return `${dateStr} ${timeStr}`;
 }
 
+export function formatDateSplit(isoDateString) {
+  const date = new Date(isoDateString);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const yesterdayOnly = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+
+  let dateStr;
+  if (dateOnly.getTime() === todayOnly.getTime()) {
+    dateStr = 'Today';
+  } else if (dateOnly.getTime() === yesterdayOnly.getTime()) {
+    dateStr = 'Yesterday';
+  } else {
+    const includeYear = dateOnly.getFullYear() === todayOnly.getFullYear();
+    dateStr = date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      ...(includeYear ? {} : { year: 'numeric' }),
+    });
+  }
+
+  const timeStr = date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  return `<div style="line-height:1.3;text-align:center;"><div>${dateStr}</div><div style="font-size:10px;color:var(--muted-dim);">${timeStr}</div></div>`;
+}
+
 export function getRepoNameFromUrl(repoUrl) {
   if (!repoUrl || typeof repoUrl !== 'string') return 'unknown';
   const parts = repoUrl.split('/');
