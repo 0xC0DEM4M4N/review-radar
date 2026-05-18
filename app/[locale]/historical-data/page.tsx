@@ -14,6 +14,11 @@ const SIZE_COLORS: Record<string, string> = {
   Enormous: '#ef4444',
 };
 
+const USER_LINE_COLORS = [
+  '#22d3ee', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#10b981', '#f97316', '#ec4899', '#6366f1',
+];
+
 interface PRData {
   id: number;
   title: string;
@@ -56,6 +61,14 @@ interface PRSizeDetail {
   category: string;
   state: string;
   url: string;
+}
+
+function getWeekStart(dateStr: string): string {
+  const d = new Date(dateStr);
+  const day = d.getDay(); // 0=Sun, 1=Mon
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d.getFullYear(), d.getMonth(), diff);
+  return formatDate(monday);
 }
 
 function formatEta(ms: number): string {
@@ -197,6 +210,13 @@ export default function HistoricalDataPage() {
   const [sizeSpreadLines, setSizeSpreadLines] = useState<{ labels: string[]; values: number[]; avg: number }>({ labels: [], values: [], avg: 0 });
   const [sizeToggle, setSizeToggle] = useState<'files' | 'lines'>('files');
 
+  const [weeklyData, setWeeklyData] = useState<{ labels: string[]; opened: number[]; merged: number[]; closed: number[] }>({ labels: [], opened: [], merged: [], closed: [] });
+  const [userWeeklyData, setUserWeeklyData] = useState<{ labels: string[]; users: { name: string; data: number[] }[] }>({ labels: [], users: [] });
+  const [userMetric, setUserMetric] = useState<'opened' | 'reviews' | 'lines'>('opened');
+  const [reviewHealth, setReviewHealth] = useState<{ avgTimeToReview: number; avgTimeToMerge: number; pctReviewed: number; avgReviewRounds: number }>({ avgTimeToReview: 0, avgTimeToMerge: 0, pctReviewed: 0, avgReviewRounds: 0 });
+  const [reviewMatrix, setReviewMatrix] = useState<{ reviewer: string; author: string; count: number }[]>([]);
+  const [heaviestPRs, setHeaviestPRs] = useState<PRSizeDetail[]>([]);
+
   const [noPat, setNoPat] = useState<boolean>(false);
   const [noRepos, setNoRepos] = useState<boolean>(false);
   const [noData, setNoData] = useState<boolean>(false);
@@ -214,6 +234,10 @@ export default function HistoricalDataPage() {
   const chartApprovalInstance = useRef<any>(null);
   const chartSizeRef = useRef<HTMLCanvasElement | null>(null);
   const chartSizeInstance = useRef<any>(null);
+  const chartWeeklyRef = useRef<HTMLCanvasElement | null>(null);
+  const chartWeeklyInstance = useRef<any>(null);
+  const chartUserRef = useRef<HTMLCanvasElement | null>(null);
+  const chartUserInstance = useRef<any>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -265,6 +289,8 @@ export default function HistoricalDataPage() {
       chartDurationInstance,
       chartApprovalInstance,
       chartSizeInstance,
+      chartWeeklyInstance,
+      chartUserInstance,
     ].forEach((ref) => {
       if (ref.current) {
         try { ref.current.destroy(); } catch (e) { /* ignore */ }
@@ -582,6 +608,145 @@ export default function HistoricalDataPage() {
       avg: lineCounts.length > 0 ? Math.round((lineCounts.reduce((a, b) => a + b, 0) / lineCounts.length) * 10) / 10 : 0,
     });
 
+    // Weekly PR throughput
+    const weekOpened: Record<string, number> = {};
+    const weekMerged: Record<string, number> = {};
+    const weekClosed: Record<string, number> = {};
+    const allWeeks = new Set<string>();
+    opened.forEach((pr) => {
+      const key = getWeekStart(pr.created_at);
+      weekOpened[key] = (weekOpened[key] || 0) + 1;
+      allWeeks.add(key);
+    });
+    merged.forEach((pr) => {
+      const key = getWeekStart(pr.merged_at!);
+      weekMerged[key] = (weekMerged[key] || 0) + 1;
+      allWeeks.add(key);
+    });
+    closed.forEach((pr) => {
+      const key = getWeekStart(pr.closed_at!);
+      weekClosed[key] = (weekClosed[key] || 0) + 1;
+      allWeeks.add(key);
+    });
+    const sortedWeeks = Array.from(allWeeks).sort();
+    setWeeklyData({
+      labels: sortedWeeks,
+      opened: sortedWeeks.map((w) => weekOpened[w] || 0),
+      merged: sortedWeeks.map((w) => weekMerged[w] || 0),
+      closed: sortedWeeks.map((w) => weekClosed[w] || 0),
+    });
+
+    // User weekly data: opened PRs, reviews given, lines changed
+    const userWeekOpened: Record<string, Record<string, number>> = {};
+    const userWeekReviewed: Record<string, Record<string, number>> = {};
+    const userWeekLines: Record<string, Record<string, number>> = {};
+    opened.forEach((pr) => {
+      const week = getWeekStart(pr.created_at);
+      const author = pr.user?.login || tc('unknown');
+      if (!userWeekOpened[author]) userWeekOpened[author] = {};
+      userWeekOpened[author][week] = (userWeekOpened[author][week] || 0) + 1;
+    });
+    prs.forEach((pr) => {
+      const reviews = reviewsMap[pr.id] || [];
+      reviews.forEach((r) => {
+        if (!r.submitted_at) return;
+        const week = getWeekStart(r.submitted_at);
+        const reviewer = r.user?.login || tc('unknown');
+        if (!userWeekReviewed[reviewer]) userWeekReviewed[reviewer] = {};
+        userWeekReviewed[reviewer][week] = (userWeekReviewed[reviewer][week] || 0) + 1;
+      });
+    });
+    opened.forEach((pr) => {
+      const week = getWeekStart(pr.created_at);
+      const author = pr.user?.login || tc('unknown');
+      const files = filesMap[pr.id] || [];
+      const lines = files.reduce((sum, f) => sum + (f.additions || 0) + (f.deletions || 0), 0);
+      if (!userWeekLines[author]) userWeekLines[author] = {};
+      userWeekLines[author][week] = (userWeekLines[author][week] || 0) + lines;
+    });
+    const allUserWeeks = sortedWeeks;
+    const allUserNames = [...new Set([...Object.keys(userWeekOpened), ...Object.keys(userWeekReviewed), ...Object.keys(userWeekLines)])].sort();
+    const topUsers = allUserNames.slice(0, 10);
+    const buildUserSeries = (source: Record<string, Record<string, number>>) =>
+      topUsers.map((name) => ({
+        name,
+        data: allUserWeeks.map((w) => source[name]?.[w] || 0),
+      }));
+    setUserWeeklyData({
+      labels: allUserWeeks,
+      users: buildUserSeries(userMetric === 'opened' ? userWeekOpened : userMetric === 'reviews' ? userWeekReviewed : userWeekLines),
+    });
+
+    // Review health
+    let totalTimeToReview = 0;
+    let reviewedPRCount = 0;
+    let totalTimeToMerge = 0;
+    let mergedPRCount = 0;
+    let totalReviewRounds = 0;
+    prs.forEach((pr) => {
+      const reviews = reviewsMap[pr.id] || [];
+      const approvals = reviews.filter((r) => r.submitted_at).sort((a, b) => new Date(a.submitted_at!).getTime() - new Date(b.submitted_at!).getTime());
+      if (approvals.length > 0 && pr.created_at) {
+        const firstReview = new Date(approvals[0].submitted_at!).getTime();
+        const created = new Date(pr.created_at).getTime();
+        const days = (firstReview - created) / (1000 * 60 * 60 * 24);
+        if (days >= 0) { totalTimeToReview += days; reviewedPRCount++; }
+      }
+      if (pr.merged_at && pr.created_at) {
+        const days = (new Date(pr.merged_at).getTime() - new Date(pr.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        if (days >= 0) { totalTimeToMerge += days; mergedPRCount++; }
+      }
+      totalReviewRounds += approvals.length;
+    });
+    setReviewHealth({
+      avgTimeToReview: reviewedPRCount > 0 ? Math.round((totalTimeToReview / reviewedPRCount) * 10) / 10 : 0,
+      avgTimeToMerge: mergedPRCount > 0 ? Math.round((totalTimeToMerge / mergedPRCount) * 10) / 10 : 0,
+      pctReviewed: prs.length > 0 ? Math.round((reviewedPRCount / prs.length) * 100) : 0,
+      avgReviewRounds: prs.length > 0 ? Math.round((totalReviewRounds / prs.length) * 10) / 10 : 0,
+    });
+
+    // Review matrix
+    const matrixMap: Record<string, Record<string, number>> = {};
+    prs.forEach((pr) => {
+      const author = pr.user?.login || tc('unknown');
+      const reviews = reviewsMap[pr.id] || [];
+      const uniqueReviewers = [...new Set(reviews.map((r) => r.user?.login).filter((login): login is string => !!login))];
+      uniqueReviewers.forEach((reviewer) => {
+        if (!matrixMap[reviewer]) matrixMap[reviewer] = {};
+        matrixMap[reviewer][author] = (matrixMap[reviewer][author] || 0) + 1;
+      });
+    });
+    const matrixFlat: { reviewer: string; author: string; count: number }[] = [];
+    Object.entries(matrixMap).forEach(([reviewer, authors]) => {
+      Object.entries(authors).forEach(([author, count]) => {
+        matrixFlat.push({ reviewer, author, count });
+      });
+    });
+    setReviewMatrix(matrixFlat.sort((a, b) => b.count - a.count));
+
+    // Heaviest PRs
+    const heavy: PRSizeDetail[] = [];
+    opened.forEach((pr) => {
+      const files = filesMap[pr.id] || [];
+      const lineCount = files.reduce((sum, f) => sum + (f.additions || 0) + (f.deletions || 0), 0);
+      const fileCount = files.length;
+      let category: string;
+      if (lineCount <= 50) category = 'Small';
+      else if (lineCount <= 250) category = 'Medium';
+      else if (lineCount <= 1000) category = 'Large';
+      else category = 'Enormous';
+      heavy.push({
+        title: pr.title || tc('untitledPR'),
+        author: pr.user?.login || tc('unknown'),
+        files: fileCount,
+        lines: lineCount,
+        category,
+        state: pr.merged ? tc('stateMerged') : pr.state === 'closed' ? tc('stateClosed') : tc('stateOpen'),
+        url: pr.html_url || '#',
+      });
+    });
+    setHeaviestPRs(heavy.sort((a, b) => b.lines - a.lines).slice(0, 20));
+
     const repoNames = [...new Set(
       prs
         .map((p) => {
@@ -593,7 +758,7 @@ export default function HistoricalDataPage() {
     const rangeLabel = range.allTime ? t('allTime') : `${formatDate(range.start!)} – ${formatDate(range.end!)}`;
     const repoLabel = repoNames.join(', ');
     setSubtitle(`${opened.length} PRs opened · ${rangeLabel} · ${repoLabel.slice(0, 60)}${repoLabel.length > 60 ? '…' : ''}`);
-  }, [tc, t]);
+  }, [tc, t, userMetric]);
 
   const totalSized = useMemo(() => Object.values(sizeCategories).reduce((a, b) => a + b, 0), [sizeCategories]);
   const sizeEntries = useMemo(() => Object.entries(sizeCategories).filter(([, v]) => v > 0), [sizeCategories]);
@@ -772,6 +937,104 @@ export default function HistoricalDataPage() {
     });
     return () => { if (chartSizeInstance.current) { chartSizeInstance.current.destroy(); chartSizeInstance.current = null; }};
   }, [sizeSpreadFiles, sizeSpreadLines, sizeToggle, tc]);
+
+  // Chart: Weekly PR throughput
+  useEffect(() => {
+    if (!chartWeeklyRef.current || weeklyData.labels.length === 0) return;
+    if (chartWeeklyInstance.current) { chartWeeklyInstance.current.destroy(); chartWeeklyInstance.current = null; }
+
+    chartWeeklyInstance.current = new Chart(chartWeeklyRef.current, {
+      type: 'bar',
+      data: {
+        labels: weeklyData.labels,
+        datasets: [
+          {
+            label: t('opened'),
+            data: weeklyData.opened,
+            backgroundColor: '#22d3ee',
+            borderRadius: 3,
+            barPercentage: 0.7,
+          },
+          {
+            label: t('merged'),
+            data: weeklyData.merged,
+            backgroundColor: '#22c55e',
+            borderRadius: 3,
+            barPercentage: 0.7,
+          },
+          {
+            label: t('closed'),
+            data: weeklyData.closed,
+            backgroundColor: '#f59e0b',
+            borderRadius: 3,
+            barPercentage: 0.7,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            titleFont: { family: "'Space Mono', monospace", size: 11 },
+            bodyFont: { family: "'Space Mono', monospace", size: 11 },
+            padding: 10,
+            cornerRadius: 6,
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, stacked: false },
+          y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.08)' } },
+        },
+      },
+    });
+    return () => { if (chartWeeklyInstance.current) { chartWeeklyInstance.current.destroy(); chartWeeklyInstance.current = null; }};
+  }, [weeklyData, t]);
+
+  // Chart: Per-user activity over time
+  useEffect(() => {
+    if (!chartUserRef.current || userWeeklyData.labels.length === 0) return;
+    if (chartUserInstance.current) { chartUserInstance.current.destroy(); chartUserInstance.current = null; }
+
+    chartUserInstance.current = new Chart(chartUserRef.current, {
+      type: 'line',
+      data: {
+        labels: userWeeklyData.labels,
+        datasets: userWeeklyData.users.map((u, i) => ({
+          label: u.name,
+          data: u.data,
+          borderColor: USER_LINE_COLORS[i % USER_LINE_COLORS.length],
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          tension: 0.3,
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 12 } },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            titleFont: { family: "'Space Mono', monospace", size: 11 },
+            bodyFont: { family: "'Space Mono', monospace", size: 11 },
+            padding: 10,
+            cornerRadius: 6,
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0, maxTicksLimit: 12 } },
+          y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.08)' } },
+        },
+      },
+    });
+    return () => { if (chartUserInstance.current) { chartUserInstance.current.destroy(); chartUserInstance.current = null; }};
+  }, [userWeeklyData, t]);
 
   useEffect(() => {
     return () => { destroyCharts(); };
@@ -1061,6 +1324,146 @@ export default function HistoricalDataPage() {
                 </div>
               </>
             )}
+          </div>
+
+          {/* Chart: Weekly PR Throughput */}
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('weeklyThroughput')}</h3>
+          <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', height: '300px' }}>
+            {weeklyData.labels.length === 0 ? (
+              <p style={{ textAlign: 'center', padding: '100px 0', fontSize: '12px', color: 'var(--muted-dim)' }}>{t('noPRsInPeriod')}</p>
+            ) : (
+              <canvas ref={chartWeeklyRef} />
+            )}
+          </div>
+
+          {/* Review Health Cards */}
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('reviewHealth')}</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+            <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('avgTimeToReview')}</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--cyan)' }}>{reviewHealth.avgTimeToReview}<span style={{ fontSize: '12px', color: 'var(--muted)' }}>d</span></div>
+            </div>
+            <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('avgTimeToMerge')}</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--green)' }}>{reviewHealth.avgTimeToMerge}<span style={{ fontSize: '12px', color: 'var(--muted)' }}>d</span></div>
+            </div>
+            <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('pctReviewed')}</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--purple)' }}>{reviewHealth.pctReviewed}<span style={{ fontSize: '12px', color: 'var(--muted)' }}>%</span></div>
+            </div>
+            <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('avgReviewRounds')}</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--amber)' }}>{reviewHealth.avgReviewRounds}</div>
+            </div>
+          </div>
+
+          {/* Chart: Per-User Activity Over Time */}
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('userActivityOverTime')}</h3>
+          <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', height: '340px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setUserMetric('opened')}
+                className={`text-[11px] font-space-mono px-3 py-1 rounded-md border transition-colors ${userMetric === 'opened' ? 'border-cyan/40 bg-cyan/10 text-cyan' : 'border-border-faint text-muted hover:text-text-primary hover:border-border-subtle'}`}
+              >
+                {t('userMetricOpened')}
+              </button>
+              <button
+                onClick={() => setUserMetric('reviews')}
+                className={`text-[11px] font-space-mono px-3 py-1 rounded-md border transition-colors ${userMetric === 'reviews' ? 'border-cyan/40 bg-cyan/10 text-cyan' : 'border-border-faint text-muted hover:text-text-primary hover:border-border-subtle'}`}
+              >
+                {t('userMetricReviews')}
+              </button>
+              <button
+                onClick={() => setUserMetric('lines')}
+                className={`text-[11px] font-space-mono px-3 py-1 rounded-md border transition-colors ${userMetric === 'lines' ? 'border-cyan/40 bg-cyan/10 text-cyan' : 'border-border-faint text-muted hover:text-text-primary hover:border-border-subtle'}`}
+              >
+                {t('userMetricLines')}
+              </button>
+            </div>
+            {userWeeklyData.labels.length === 0 || userWeeklyData.users.length === 0 ? (
+              <p style={{ textAlign: 'center', padding: '100px 0', fontSize: '12px', color: 'var(--muted-dim)' }}>{t('noPRsInPeriod')}</p>
+            ) : (
+              <canvas ref={chartUserRef} />
+            )}
+          </div>
+
+          {/* Review Matrix */}
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('reviewMatrix')}</h3>
+          <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', overflowX: 'auto' }}>
+            <table className="w-full border-collapse text-[13px]">
+              <thead className="border-b border-border-faint">
+                <tr>
+                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('reviewer')}</th>
+                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('author')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('reviewCount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviewMatrix.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted-dim)' }}>
+                      {t('noReviews')}
+                    </td>
+                  </tr>
+                ) : (
+                  reviewMatrix.slice(0, 50).map((row, idx) => (
+                    <tr key={`${row.reviewer}-${row.author}-${idx}`} style={{ borderBottom: '0.5px solid var(--border-faint)' }}>
+                      <td style={{ padding: '10px 12px', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--text-primary)' }}>{row.reviewer}</td>
+                      <td style={{ padding: '10px 12px', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--text-primary)' }}>{row.author}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--cyan)' }}>{row.count}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Heaviest PRs */}
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('heaviestPRs')}</h3>
+          <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', overflowX: 'auto' }}>
+            <table className="w-full border-collapse text-[13px]">
+              <thead className="border-b border-border-faint">
+                <tr>
+                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colPullRequest')}</th>
+                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colAuthor')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colFiles')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colLines')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colSize')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colStatus')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {heaviestPRs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted-dim)' }}>
+                      {t('noPRsInPeriod')}
+                    </td>
+                  </tr>
+                ) : (
+                  heaviestPRs.map((pr, idx) => {
+                    const color = SIZE_COLORS[pr.category];
+                    return (
+                      <tr key={idx} style={{ borderBottom: '0.5px solid var(--border-faint)' }}>
+                        <td style={{ padding: '10px 12px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <a href={pr.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'none', fontSize: '12px' }} title={pr.title}>
+                            {pr.title.substring(0, 60)}{pr.title.length > 60 ? '…' : ''}
+                          </a>
+                        </td>
+                        <td style={{ padding: '10px 12px', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--text-primary)' }}>{pr.author}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--text-primary)' }}>{pr.files}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--text-primary)' }}>{pr.lines}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, color, background: `${color}22` }}>
+                            {tc(`size${pr.category}`)}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted)' }}>{pr.state}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
 
           {/* PR Size Distribution */}
