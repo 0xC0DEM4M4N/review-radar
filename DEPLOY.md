@@ -17,7 +17,7 @@ This generates the static site into the `dist/` directory.
 ## Deploy
 
 ```bash
-npx wrangler pages deploy dist --project-name=reviewradar --branch=main
+npx wrangler pages deploy dist --project-name=review-radar --branch=main
 ```
 
 Or use the deploy script:
@@ -30,13 +30,13 @@ Or use the deploy script:
 
 1. **Create the Pages project** (if it doesn't exist):
    ```bash
-   npx wrangler pages project create reviewradar --production-branch=main
+   npx wrangler pages project create review-radar --production-branch=main
    ```
 
 2. **Deploy**:
    ```bash
    npm run build
-   npx wrangler pages deploy dist --project-name=reviewradar --branch=main
+   npx wrangler pages deploy dist --project-name=review-radar --branch=main
    ```
 
 3. **Get your production URL** from the output and update any callback URLs if needed.

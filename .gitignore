@@ -5,6 +5,7 @@ node_modules/
 dist/
 out/
 build/
+.next/
 
 # System files
 .DS_Store

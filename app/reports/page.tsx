@@ -1,0 +1,1080 @@
+'use client';
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
+import Chart from 'chart.js/auto';
+import Layout from '@/components/Layout';
+import LoadingIllustration from '@/components/LoadingIllustration';
+
+const CHART_COLORS = ['#22d3ee', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#10b981', '#f97316'];
+
+type BuildStatus = { state: string; conclusion: string | null };
+
+type Review = { state: string; user?: { login: string }; submitted_at?: string };
+
+type PR = {
+  id: number;
+  title: string;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  user?: { login: string; avatar_url?: string };
+  repository_url?: string;
+  url?: string;
+  number?: number;
+  draft?: boolean;
+  labels?: { name: string; color: string }[];
+  reviews?: Review[];
+  buildStatus?: BuildStatus;
+  mergeable_state?: string;
+  mergeable?: boolean;
+  head?: { sha: string };
+};
+
+function loadJSON<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getStoredPat(): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('github-pat') || '';
+}
+
+function getStoredRepos(): string[] {
+  return loadJSON<string[]>('github-repos', []);
+}
+
+function getSelectedRepos(): string[] {
+  return loadJSON<string[]>('selected-repos', []);
+}
+
+function filterPRsBySelectedRepos(prs: PR[]): PR[] {
+  const selectedRepos = getSelectedRepos();
+  if (selectedRepos.length === 0) return prs;
+  return prs.filter((pr) => {
+    const url = pr.repository_url || pr.url || '';
+    const match = url.match(/repos\/([^/]+\/[^/]+)/);
+    const repoName = match ? match[1] : null;
+    return repoName && selectedRepos.includes(repoName);
+  });
+}
+
+function stripLargeDataForStorage(prs: PR[]): PR[] {
+  return prs.map((pr) => ({
+    ...pr,
+    buildStatus: pr.buildStatus ? { state: pr.buildStatus.state, conclusion: pr.buildStatus.conclusion } : undefined,
+  }));
+}
+
+async function ghFetch(url: string, pat: string) {
+  const res = await fetch(url, {
+    headers: { Authorization: `token ${pat}`, Accept: 'application/vnd.github.v3+json' },
+  });
+  if (!res.ok) throw new Error(`GitHub ${res.status}: ${url}`);
+  return res.json();
+}
+
+async function fetchRepoPRs(repo: string, pat: string): Promise<PR[]> {
+  const prs: PR[] = [];
+  for (let page = 1; page <= 5; page++) {
+    try {
+      const data = await ghFetch(
+        `https://api.github.com/repos/${repo}/pulls?state=open&per_page=100&page=${page}&sort=updated&direction=desc`,
+        pat
+      );
+      if (!Array.isArray(data) || data.length === 0) break;
+      prs.push(...data);
+      if (data.length < 100) break;
+    } catch (e) {
+      console.warn('Repo fetch error', repo, (e as Error).message);
+      break;
+    }
+  }
+  return prs;
+}
+
+async function fetchUserSearchPRs(pat: string): Promise<PR[]> {
+  const prs: PR[] = [];
+  try {
+    const user = await ghFetch('https://api.github.com/user', pat);
+    for (let page = 1; page <= 3; page++) {
+      const data = await ghFetch(
+        `https://api.github.com/search/issues?q=type:pr+involves:${user.login}+state:open&per_page=100&page=${page}&sort=updated&order=desc`,
+        pat
+      );
+      if (!data.items || data.items.length === 0) break;
+      prs.push(...data.items);
+      if (data.items.length < 100) break;
+    }
+  } catch (e) {
+    console.warn('User search error', (e as Error).message);
+  }
+  return prs;
+}
+
+async function fetchReviews(pr: PR, pat: string): Promise<Review[]> {
+  try {
+    const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
+    if (!repoMatch || !pr.number) return [];
+    const data = await ghFetch(`https://api.github.com/repos/${repoMatch[1]}/pulls/${pr.number}/reviews`, pat);
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function fetchBuildStatus(pr: PR, pat: string): Promise<BuildStatus> {
+  try {
+    if (!pr.head || !pr.head.sha) return { state: 'unknown', conclusion: null };
+    const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
+    if (!repoMatch) return { state: 'unknown', conclusion: null };
+
+    const checksResponse = await fetch(
+      `https://api.github.com/repos/${repoMatch[1]}/commits/${pr.head.sha}/check-runs`,
+      { headers: { Authorization: `token ${pat}`, Accept: 'application/vnd.github.v3+json' } }
+    );
+
+    let buildStatus: BuildStatus = { state: 'unknown', conclusion: null };
+    if (checksResponse.ok) {
+      const checksData = await checksResponse.json();
+      if (checksData.check_runs && checksData.check_runs.length > 0) {
+        const statuses: string[] = checksData.check_runs.map((run: any) => run.status);
+        const conclusions: string[] = checksData.check_runs.map((run: any) => run.conclusion).filter((c: any) => c);
+
+        if (statuses.includes('in_progress') || statuses.includes('queued')) {
+          buildStatus.state = 'in_progress';
+        } else if (statuses.every((s) => s === 'completed')) {
+          if (conclusions.includes('failure') || conclusions.includes('cancelled')) {
+            buildStatus.state = 'failure';
+          } else if (conclusions.every((c) => c === 'success' || c === 'neutral' || c === 'skipped')) {
+            buildStatus.state = 'success';
+          } else {
+            buildStatus.state = 'pending';
+          }
+        } else {
+          buildStatus.state = 'in_progress';
+        }
+        buildStatus.conclusion = conclusions[0] || null;
+      }
+    }
+    return buildStatus;
+  } catch (e) {
+    return { state: 'unknown', conclusion: null };
+  }
+}
+
+async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void): Promise<PR[]> {
+  const allRepos = getStoredRepos();
+  const selectedRepos = getSelectedRepos();
+  const repos = selectedRepos.length > 0 ? selectedRepos : allRepos;
+  let rawPRs: PR[] = [];
+
+  if (repos.length > 0) {
+    setStatusMsg(`Fetching PRs from ${repos.length} repo${repos.length !== 1 ? 's' : ''}…`);
+    const chunks = await Promise.all(repos.map((r) => fetchRepoPRs(r, pat)));
+    rawPRs = chunks.flat();
+  } else {
+    setStatusMsg('Fetching your PRs from GitHub…');
+    rawPRs = await fetchUserSearchPRs(pat);
+  }
+
+  if (rawPRs.length === 0) return [];
+
+  setStatusMsg(`Fetching reviews for ${rawPRs.length} PRs…`);
+  const withReviews: PR[] = [];
+  for (let i = 0; i < rawPRs.length; i += 10) {
+    const batch = rawPRs.slice(i, i + 10);
+    const resolved = await Promise.all(
+      batch.map((pr) => fetchReviews(pr, pat).then((reviews) => ({ ...pr, reviews })))
+    );
+    withReviews.push(...resolved);
+    if (i + 10 < rawPRs.length) setStatusMsg(`Fetched reviews ${Math.min(i + 10, rawPRs.length)} / ${rawPRs.length}…`);
+  }
+
+  setStatusMsg(`Fetching build status for ${withReviews.length} PRs…`);
+  const withBuildStatus: PR[] = [];
+  for (let i = 0; i < withReviews.length; i += 10) {
+    const batch = withReviews.slice(i, i + 10);
+    const resolved = await Promise.all(
+      batch.map((pr) => fetchBuildStatus(pr, pat).then((buildStatus) => ({ ...pr, buildStatus })))
+    );
+    withBuildStatus.push(...resolved);
+    if (i + 10 < withReviews.length)
+      setStatusMsg(`Fetched build status ${Math.min(i + 10, withReviews.length)} / ${withReviews.length}…`);
+  }
+  return withBuildStatus;
+}
+
+function getRepoNames(prs: PR[]): string[] {
+  const repos = prs
+    .map((pr) => {
+      const url = pr.repository_url || pr.url || '';
+      const m = url.match(/repos\/([^/]+\/[^/]+)/);
+      return m ? m[1] : null;
+    })
+    .filter(Boolean) as string[];
+  return [...new Set(repos)];
+}
+
+function getSubtitle(prs: PR[]): string {
+  const repos = getRepoNames(prs);
+  const repoLabel =
+    repos.length > 0
+      ? repos.join(', ').slice(0, 80) + (repos.join(', ').length > 80 ? '…' : '')
+      : 'all repos';
+  return `${prs.length} open PRs · ${repoLabel}`;
+}
+
+export default function ReportsPage() {
+  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [statusMsg, setStatusMsg] = useState('');
+  const [statusError, setStatusError] = useState(false);
+  const [prs, setPRs] = useState<PR[]>([]);
+  const [view, setView] = useState<'grid' | 'noData' | 'noPat' | 'noRepos' | 'initial'>('initial');
+  const [subtitle, setSubtitle] = useState('Current snapshot of your pull requests');
+
+  const chartStatusRef = useRef<HTMLCanvasElement | null>(null);
+  const chartStatusInstance = useRef<Chart | null>(null);
+
+  // Configure Chart.js theme
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('reviewradar-theme');
+    const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+    const theme = savedTheme || (prefersLight ? 'light' : 'dark');
+    if (theme === 'light') {
+      Chart.defaults.color = 'rgba(0,0,0,0.5)';
+      Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
+    } else {
+      Chart.defaults.color = 'rgba(255,255,255,0.45)';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+    }
+    Chart.defaults.font.family = "'Space Mono', monospace";
+    Chart.defaults.font.size = 11;
+  }, []);
+
+  const destroyCharts = useCallback(() => {
+    if (chartStatusInstance.current) {
+      try {
+        chartStatusInstance.current.destroy();
+      } catch (e) {
+        // ignore
+      }
+      chartStatusInstance.current = null;
+    }
+  }, []);
+
+  const setStatus = useCallback((msg: string, isError: boolean) => {
+    setStatusMsg(msg);
+    setStatusError(isError);
+  }, []);
+
+  const showData = useCallback(
+    (data: PR[]) => {
+      setPRs(data);
+      setSubtitle(getSubtitle(data));
+      setView('grid');
+    },
+    []
+  );
+
+  const renderStatusChart = useCallback(
+    (data: PR[]) => {
+      destroyCharts();
+      const statusCounts: Record<string, number> = { Open: 0, 'In review': 0, Approved: 0, Blocked: 0, Draft: 0 };
+      data.forEach((pr) => {
+        const reviews = pr.reviews || [];
+        const hasApproval = reviews.some((r) => r.state === 'APPROVED');
+        const hasChanges = reviews.some((r) => r.state === 'CHANGES_REQUESTED');
+        const mergeConflict = pr.mergeable_state === 'dirty' || pr.mergeable === false;
+
+        if (hasChanges || mergeConflict) statusCounts['Blocked']++;
+        else if (hasApproval) statusCounts['Approved']++;
+        else if (reviews.length > 0) statusCounts['In review']++;
+        else if (pr.draft) statusCounts['Draft']++;
+        else statusCounts['Open']++;
+      });
+
+      const statusEntries = Object.entries(statusCounts).filter(([, v]) => v > 0);
+      if (statusEntries.length === 0) return;
+
+      const el = chartStatusRef.current;
+      if (!el) return;
+
+      chartStatusInstance.current = new Chart(el, {
+        type: 'pie',
+        data: {
+          labels: statusEntries.map((e) => e[0]),
+          datasets: [
+            {
+              data: statusEntries.map((e) => e[1]),
+              backgroundColor: CHART_COLORS.slice(0, statusEntries.length).map((c) => c + 'cc'),
+              borderColor: 'rgba(255,255,255,0.06)',
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { boxWidth: 10, padding: 12 },
+            },
+          },
+        },
+      });
+    },
+    [destroyCharts]
+  );
+
+  const renderMetrics = useCallback((data: PR[]) => {
+    const now = Date.now();
+    const total = data.length;
+    const approved = data.filter((p) => p.reviews?.some((r) => r.state === 'APPROVED')).length;
+    const failingBuilds = data.filter((p) => p.buildStatus?.state === 'failure').length;
+    const noReviews = data.filter((p) => !p.reviews || p.reviews.length === 0).length;
+    const oneReview = data.filter((p) => p.reviews && p.reviews.length === 1).length;
+    const manyReviews = data.filter((p) => p.reviews && p.reviews.length >= 2).length;
+    const lt24h = data.filter((p) => (now - new Date(p.updated_at || 0).getTime()) / (1000 * 60 * 60) < 24).length;
+    const lt7d = data.filter((p) => {
+      const diff = (now - new Date(p.updated_at || 0).getTime()) / (1000 * 60 * 60);
+      return diff >= 24 && diff < 168;
+    }).length;
+    const gt7d = data.filter((p) => (now - new Date(p.updated_at || 0).getTime()) / (1000 * 60 * 60) >= 168).length;
+
+    return { total, approved, failingBuilds, noReviews, oneReview, manyReviews, lt24h, lt7d, gt7d };
+  }, []);
+
+  const renderPersonChart = useCallback((data: PR[]) => {
+    const byPerson: Record<string, number> = {};
+    data.forEach((pr) => {
+      const author = pr.user?.login || 'unknown';
+      byPerson[author] = (byPerson[author] || 0) + 1;
+    });
+    const sorted = Object.entries(byPerson)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 16);
+    return sorted;
+  }, []);
+
+  const renderLabelsChart = useCallback((data: PR[]) => {
+    const byLabel: Record<string, number> = {};
+    data.forEach((pr) => (pr.labels || []).forEach((l) => {
+      byLabel[l.name] = (byLabel[l.name] || 0) + 1;
+    }));
+    const sorted = Object.entries(byLabel)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    return sorted;
+  }, []);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setStatus('', false);
+    destroyCharts();
+
+    const pat = getStoredPat();
+    const raw = localStorage.getItem('reviewradar-prs');
+    let cached: PR[] = [];
+    try {
+      cached = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      cached = [];
+    }
+
+    // If we have cached data and no PAT, show it immediately
+    if (cached.length > 0 && !pat) {
+      const filteredCached = filterPRsBySelectedRepos(cached);
+      if (filteredCached.length > 0) {
+        showData(filteredCached);
+        setLoading(false);
+        setStatus('Using cached data — add a GitHub token in Settings to fetch live data.', false);
+        return;
+      } else {
+        setView('noRepos');
+        setLoading(false);
+        return;
+      }
+    } else if (!pat) {
+      setLoading(false);
+      setView('noPat');
+      return;
+    } else if (getSelectedRepos().length === 0 && getStoredRepos().length === 0) {
+      setLoading(false);
+      setView('noRepos');
+      return;
+    }
+
+    // Fetch fresh data if we have a PAT
+    try {
+      const fetched = await fetchLivePRs(pat, setStatusMsg);
+      if (fetched.length > 0) {
+        try {
+          const stripped = stripLargeDataForStorage(fetched);
+          localStorage.setItem('reviewradar-prs', JSON.stringify(stripped));
+        } catch (storageError) {
+          console.warn('Storage quota exceeded, using fetched data without caching:', (storageError as Error).message);
+        }
+        showData(fetched);
+      } else {
+        setStatus('No open PRs found', false);
+        setView('noData');
+      }
+    } catch (e) {
+      console.error('Load error:', e);
+      setStatus('Error loading data: ' + (e as Error).message, true);
+      setView('noData');
+    }
+
+    setLoading(false);
+  }, [destroyCharts, setStatus, showData]);
+
+  // Re-render charts whenever PRs change
+  useEffect(() => {
+    if (view === 'grid' && prs.length > 0) {
+      renderStatusChart(prs);
+    }
+    return () => {
+      destroyCharts();
+    };
+  }, [view, prs, renderStatusChart, destroyCharts]);
+
+  useEffect(() => {
+    setMounted(true);
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!mounted) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-full">
+          <div style={{ color: 'var(--muted)' }}>Loading…</div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const metrics = view === 'grid' ? renderMetrics(prs) : null;
+  const personData = view === 'grid' ? renderPersonChart(prs) : [];
+  const labelsData = view === 'grid' ? renderLabelsChart(prs) : [];
+
+  return (
+    <Layout>
+      <div className="max-w-[1400px] mx-auto">
+        {/* Header */}
+        <div className="rr-header-row">
+          <div className="rr-radar-bg" style={{ background: 'var(--ink-light)' }}>
+            <svg width="26" height="26" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6" stroke="var(--cyan)" strokeWidth="1.5" fill="none" />
+              <circle cx="8" cy="8" r="3" fill="var(--cyan)" opacity="0.3" />
+            </svg>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 className="rr-header-title">Status Report</h1>
+            <p className="rr-header-sub">{subtitle}</p>
+          </div>
+          <div className="rr-header-actions">
+            <button onClick={loadData} disabled={loading} className="rr-btn-primary">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ opacity: loading ? 0.5 : 1 }}
+              >
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Status bar */}
+        {statusMsg && (
+          <div
+            style={{
+              display: 'block',
+              fontFamily: "'Space Mono', monospace",
+              fontSize: 12,
+              color: statusError ? 'var(--red)' : 'var(--muted)',
+              marginBottom: 12,
+              padding: '8px 12px',
+              borderRadius: 6,
+              background: 'rgba(255,255,255,0.03)',
+              border: '0.5px solid var(--border-faint)',
+            }}
+          >
+            {statusMsg}
+          </div>
+        )}
+
+        {/* No data / no PAT / no repos / loading states */}
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 32px', flexDirection: 'column' }}>
+            <LoadingIllustration width={240} height={160} />
+            <p
+              style={{
+                fontFamily: "'Space Mono', monospace",
+                fontSize: 12,
+                color: 'var(--muted)',
+                marginTop: 16,
+                letterSpacing: '0.05em',
+              }}
+            >
+              Fetching data...
+            </p>
+          </div>
+        )}
+
+        {!loading && view === 'noData' && (
+          <div style={{ textAlign: 'center', padding: '80px 32px' }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'var(--cyan-dim)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+              }}
+            >
+              <svg style={{ color: 'var(--cyan)' }} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                <path d="M22 12A10 10 0 0 0 12 2v10z" />
+              </svg>
+            </div>
+            <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 14, color: 'var(--text-primary)', marginBottom: 8 }}>
+              Loading…
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--muted)' }}>Fetching your pull requests from GitHub.</p>
+          </div>
+        )}
+
+        {!loading && view === 'noPat' && (
+          <div style={{ textAlign: 'center', padding: '80px 32px' }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'rgba(245,158,11,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+              }}
+            >
+              <svg
+                style={{ color: 'var(--amber)' }}
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 14, color: 'var(--text-primary)', marginBottom: 8 }}>
+              No GitHub token configured
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+              Add your Personal Access Token in Settings to fetch live data.
+            </p>
+            <Link href="/settings" className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+              Go to Settings
+            </Link>
+          </div>
+        )}
+
+        {!loading && view === 'noRepos' && (
+          <div style={{ textAlign: 'center', padding: '80px 32px' }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'var(--cyan-dim)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+              }}
+            >
+              <svg
+                style={{ color: 'var(--cyan)' }}
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+              </svg>
+            </div>
+            <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 14, color: 'var(--text-primary)', marginBottom: 8 }}>
+              No repositories selected
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+              Add repositories in Settings to start tracking pull requests.
+            </p>
+            <Link href="/settings" className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+              Add Repositories →
+            </Link>
+          </div>
+        )}
+
+        {/* Main content grid */}
+        {!loading && view === 'grid' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, maxWidth: '100%' }}>
+            {/* Top Metrics Row: Total PRs, Approved, Failing Builds */}
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Overview</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  Total PRs
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--cyan)' }}>
+                  {metrics?.total ?? '—'}
+                </div>
+              </div>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  Approved
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>
+                  {metrics?.approved ?? '—'}
+                </div>
+              </div>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  Failed
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--red)' }}>
+                  {metrics?.failingBuilds ?? '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* Reviews Row: No Reviews, 1 Review, 2+ Reviews */}
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Review Status</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  No Reviews
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--amber)' }}>
+                  {metrics?.noReviews ?? '—'}
+                </div>
+              </div>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  1 Review
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--cyan)' }}>
+                  {metrics?.oneReview ?? '—'}
+                </div>
+              </div>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  2+ Reviews
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>
+                  {metrics?.manyReviews ?? '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* Last Updated Row: <24hrs, <7 days, >7 days */}
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Last Updated</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  &lt; 24 HRS
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>
+                  {metrics?.lt24h ?? '—'}
+                </div>
+              </div>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  &lt; 7 DAYS
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--cyan)' }}>
+                  {metrics?.lt7d ?? '—'}
+                </div>
+              </div>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  &gt; 7 DAYS
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--amber)' }}>
+                  {metrics?.gt7d ?? '—'}
+                </div>
+              </div>
+            </div>
+
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Visualisations</h3>
+            {/* Two column layout for charts */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Open PRs by Person (Horizontal Bar Chart) */}
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 20,
+                }}
+              >
+                <div className="rr-stat-label" style={{ marginBottom: 14 }}>
+                  Open PRs by Person
+                </div>
+                <div style={{ minHeight: 240 }}>
+                  {personData.length === 0 ? (
+                    <p style={{ textAlign: 'center', padding: '60px', fontSize: 12, color: 'var(--muted-dim)' }}>
+                      No PR authors found
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {personData.map((entry, i) => {
+                        const pct = (entry[1] / Math.max(...personData.map((x) => x[1]))) * 100;
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div
+                              style={{
+                                fontFamily: "'Space Mono', monospace",
+                                fontSize: 11,
+                                color: 'var(--muted-dim)',
+                                minWidth: 140,
+                                textAlign: 'right',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {entry[0].substring(0, 20)}
+                            </div>
+                            <div
+                              style={{
+                                flex: 1,
+                                height: 18,
+                                background: 'rgba(34,211,238,0.2)',
+                                borderRadius: 3,
+                                overflow: 'hidden',
+                                position: 'relative',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: '100%',
+                                  background: 'var(--cyan)',
+                                  width: `${pct}%`,
+                                  borderRadius: 3,
+                                }}
+                              />
+                            </div>
+                            <div
+                              style={{
+                                fontFamily: "'Space Mono', monospace",
+                                fontSize: 11,
+                                color: 'var(--text-primary)',
+                                minWidth: 30,
+                                textAlign: 'right',
+                              }}
+                            >
+                              {entry[1]}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* PR by Status (Pie Chart) */}
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 20,
+                }}
+              >
+                <div className="rr-stat-label" style={{ marginBottom: 14 }}>
+                  PR by Status
+                </div>
+                <div style={{ position: 'relative', height: 200 }}>
+                  <canvas ref={chartStatusRef} id="chartStatus" />
+                </div>
+              </div>
+            </div>
+
+            {/* PRs by Label (Horizontal Bar Chart) - Full Width */}
+            <div
+              className="rr-stat"
+              style={{
+                background: 'var(--ink-light)',
+                border: '0.5px solid var(--border-faint)',
+                borderRadius: 12,
+                padding: 20,
+              }}
+            >
+              <div className="rr-stat-label" style={{ marginBottom: 14 }}>
+                PRs by Label
+              </div>
+              <div style={{ minHeight: 200 }}>
+                {labelsData.length === 0 ? (
+                  <p style={{ textAlign: 'center', padding: '60px', fontSize: 12, color: 'var(--muted-dim)' }}>
+                    No labels found
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {labelsData.map((entry, i) => {
+                      const pct = (entry[1] / Math.max(...labelsData.map((x) => x[1]))) * 100;
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div
+                            style={{
+                              fontFamily: "'Space Mono', monospace",
+                              fontSize: 11,
+                              color: 'var(--muted-dim)',
+                              minWidth: 100,
+                              textAlign: 'right',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {entry[0].substring(0, 16)}
+                          </div>
+                          <div
+                            style={{
+                              flex: 1,
+                              height: 18,
+                              background: 'rgba(245,158,11,0.2)',
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                              position: 'relative',
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: '100%',
+                                background: 'var(--amber)',
+                                width: `${pct}%`,
+                                borderRadius: 3,
+                              }}
+                            />
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: "'Space Mono', monospace",
+                              fontSize: 11,
+                              color: 'var(--text-primary)',
+                              minWidth: 30,
+                              textAlign: 'right',
+                            }}
+                          >
+                            {entry[1]}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}

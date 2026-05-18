@@ -1,0 +1,472 @@
+'use client';
+
+import { useMemo, useCallback, useRef, useState, useEffect } from 'react';
+import { useAppStore, COLUMN_META, ColumnKey, PR } from '@/lib/store';
+import {
+  escapeHtml,
+  formatDateSplit,
+  getRepoFullNameFromUrl,
+  getRepoNameFromUrl,
+  getRepoColorIndex,
+} from '@/lib/utils';
+
+function getReviewSummary(pr: PR) {
+  const reviews = pr.reviews || [];
+  const statusMap: Record<string, number> = {};
+  reviews.forEach((review) => {
+    if (review.state === 'APPROVED') statusMap.approved = (statusMap.approved || 0) + 1;
+    else if (review.state === 'CHANGES_REQUESTED') statusMap.changes = (statusMap.changes || 0) + 1;
+    else if (review.state === 'COMMENTED') statusMap.commented = (statusMap.commented || 0) + 1;
+    else if (review.state === 'PENDING') statusMap.pending = (statusMap.pending || 0) + 1;
+  });
+  return statusMap;
+}
+
+function getConsolidatedReviews(pr: PR) {
+  const reviews = pr.reviews || [];
+  const byUser: Record<string, any> = {};
+  reviews.forEach((review) => {
+    const userName = review.user?.login;
+    if (!userName) return;
+    if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED') return;
+    const existing = byUser[userName];
+    const newDate = new Date(review.submitted_at || review.created_at || 0);
+    if (!existing || newDate > new Date(existing.submitted_at || existing.created_at || 0)) {
+      byUser[userName] = review;
+    }
+  });
+  return Object.values(byUser);
+}
+
+function getStatusText(pr: PR) {
+  const latest = getConsolidatedReviews(pr);
+  const approvalCount = latest.filter((r: any) => r.state === 'APPROVED').length;
+  const hasChanges = latest.some((r: any) => r.state === 'CHANGES_REQUESTED');
+  const buildFailed = pr.buildStatus?.state === 'failure';
+  const mergeConflict = pr.mergeable_state === 'dirty';
+  if (hasChanges || buildFailed || mergeConflict) {
+    return hasChanges ? 'Changes req.' : buildFailed ? 'Build fail' : 'Needs rebase';
+  }
+  if (approvalCount >= 2) return 'Approved';
+  if (latest.length > 0) return 'Awaiting approval';
+  if (pr.draft) return 'Draft';
+  return 'Open';
+}
+
+function getStatusBadge(pr: PR) {
+  const text = getStatusText(pr);
+  const map: Record<string, string> = {
+    'Changes req.': 'rr-badge-blocked',
+    'Build fail': 'rr-badge-blocked',
+    'Needs rebase': 'rr-badge-blocked',
+    'Approved': 'rr-badge-approved',
+    'Awaiting approval': 'rr-badge-review',
+    'Draft': 'rr-badge-draft',
+    'Open': 'rr-badge-open',
+  };
+  return <span className={`rr-badge ${map[text] || 'rr-badge-open'}`}><span className="rr-badge-dot" />{text}</span>;
+}
+
+function getBuildText(pr: PR) {
+  const state = pr.buildStatus?.state;
+  if (state === 'success') return <span className="rr-build-ok">✓ pass</span>;
+  if (state === 'failure') return <span className="rr-build-fail">✗ fail</span>;
+  if (state === 'in_progress') return <span className="rr-build-run">⟳ running</span>;
+  if (state === 'pending') return <span className="rr-build-run">⟳ pending</span>;
+  return <span className="rr-build-na">—</span>;
+}
+
+function getUserAction(pr: PR, currentUser: string | null) {
+  const review = pr.reviews?.find((r) => r.user?.login === currentUser);
+  if (!review) return '';
+  if (review.state === 'APPROVED') return <span title="You approved">✓</span>;
+  if (review.state === 'COMMENTED') return <span title="You left comments">💬</span>;
+  return '';
+}
+
+function AuthorAvatar({ login, avatarUrl }: { login: string; avatarUrl?: string }) {
+  const colors = ['#0e7490', '#7c3aed', '#b45309', '#0f766e', '#be185d', '#1d4ed8', '#15803d', '#9333ea'];
+  let hash = 0;
+  for (let i = 0; i < login.length; i++) hash = login.charCodeAt(i) + ((hash << 5) - hash);
+  const color = colors[Math.abs(hash) % colors.length];
+  const initials = login.slice(0, 2).toUpperCase();
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt={login} className="rr-avatar-img" title={login} onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />;
+  }
+  return <span className="rr-avatar" style={{ background: color }} title={login}>{initials}</span>;
+}
+
+export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => void }) {
+  const {
+    allPRs,
+    currentUser,
+    currentFilter,
+    currentSort,
+    activeFilters,
+    selectedRepos,
+    columnOrder,
+    setActiveFilter,
+  } = useAppStore();
+
+  const filteredPRs = useMemo(() => {
+    let prs = allPRs.filter((pr) => {
+      const repoUrl = pr.repository_url || pr.url;
+      if (!repoUrl || typeof repoUrl !== 'string') return false;
+      const repoName = getRepoFullNameFromUrl(repoUrl);
+      return selectedRepos.has(repoName);
+    });
+
+    if (currentFilter === 'owned') {
+      prs = prs.filter((pr) => (pr.user?.login || '') === currentUser);
+    } else if (currentFilter === 'not-owned') {
+      prs = prs.filter((pr) => (pr.user?.login || '') !== currentUser);
+    } else if (currentFilter === 'approved') {
+      prs = prs.filter((pr) => getConsolidatedReviews(pr).filter((r: any) => r.state === 'APPROVED').length >= 2);
+    } else if (currentFilter === 'blocked') {
+      prs = prs.filter((pr) =>
+        pr.buildStatus?.state === 'failure' ||
+        pr.mergeable_state === 'dirty' ||
+        pr.reviews?.some((r) => r.state === 'CHANGES_REQUESTED')
+      );
+    } else if (currentFilter === 'needs-attention') {
+      prs = prs.filter((pr) => {
+        const isNotByMe = (pr.user?.login || '') !== currentUser;
+        const isNotDraft = !pr.draft;
+        const hasNotReviewedByMe = !pr.reviews?.some((r) => r.user?.login === currentUser);
+        const hasNoApprovals = !pr.reviews?.some((r) => r.state === 'APPROVED');
+        return isNotByMe && isNotDraft && hasNotReviewedByMe && hasNoApprovals;
+      });
+      if (currentSort.length === 0) {
+        prs.sort((a, b) => {
+          const aPass = a.buildStatus?.state === 'success' ? 1 : 0;
+          const bPass = b.buildStatus?.state === 'success' ? 1 : 0;
+          if (bPass !== aPass) return bPass - aPass;
+          return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+        });
+      }
+    }
+
+    if (activeFilters.label) {
+      prs = prs.filter((pr) => pr.labels?.some((l) => l.name === activeFilters.label));
+    }
+    if (activeFilters.status) {
+      prs = prs.filter((pr) => getStatusText(pr) === activeFilters.status);
+    }
+    if (activeFilters.author) {
+      prs = prs.filter((pr) => (pr.user?.login || '') === activeFilters.author);
+    }
+
+    if (currentSort.length > 0) {
+      prs.sort((a, b) => {
+        for (const { column, direction } of currentSort) {
+          let aVal: any;
+          let bVal: any;
+          switch (column) {
+            case 'title':
+              aVal = (a.title || '').toLowerCase();
+              bVal = (b.title || '').toLowerCase();
+              break;
+            case 'repo':
+              aVal = getRepoNameFromUrl(a.repository_url || '').toLowerCase();
+              bVal = getRepoNameFromUrl(b.repository_url || '').toLowerCase();
+              break;
+            case 'author':
+              aVal = (a.user?.login || '').toLowerCase();
+              bVal = (b.user?.login || '').toLowerCase();
+              break;
+            case 'status':
+              aVal = getStatusText(a).toLowerCase();
+              bVal = getStatusText(b).toLowerCase();
+              break;
+            case 'approvals':
+              aVal = getReviewSummary(a).approved || 0;
+              bVal = getReviewSummary(b).approved || 0;
+              break;
+            case 'comments':
+              aVal = getReviewSummary(a).commented || 0;
+              bVal = getReviewSummary(b).commented || 0;
+              break;
+            case 'labels':
+              aVal = a.labels?.length || 0;
+              bVal = b.labels?.length || 0;
+              break;
+            case 'buildStatus':
+              aVal = a.buildStatus?.state || 'unknown';
+              bVal = b.buildStatus?.state || 'unknown';
+              break;
+            case 'created':
+              aVal = new Date(a.created_at || 0).getTime();
+              bVal = new Date(b.created_at || 0).getTime();
+              break;
+            case 'updated':
+              aVal = new Date(a.updated_at || 0).getTime();
+              bVal = new Date(b.updated_at || 0).getTime();
+              break;
+            case 'myaction': {
+              const aR = a.reviews?.find((r) => r.user?.login === currentUser);
+              const bR = b.reviews?.find((r) => r.user?.login === currentUser);
+              aVal = aR ? (aR.state === 'APPROVED' ? 2 : 1) : 0;
+              bVal = bR ? (bR.state === 'APPROVED' ? 2 : 1) : 0;
+              break;
+            }
+            default:
+              continue;
+          }
+          let cmp = 0;
+          if (typeof aVal === 'string') cmp = aVal.localeCompare(bVal);
+          else cmp = aVal - bVal;
+          if (cmp !== 0) return direction === 'asc' ? cmp : -cmp;
+        }
+        return 0;
+      });
+    }
+
+    return prs;
+  }, [allPRs, currentUser, currentFilter, currentSort, activeFilters, selectedRepos]);
+
+  const renderCell = useCallback((pr: PR, key: ColumnKey) => {
+    const authorLogin = pr.user?.login || 'unknown';
+    const isOwned = authorLogin === currentUser;
+    const repoUrl = pr.repository_url || pr.url || '';
+    const fullRepoName = getRepoFullNameFromUrl(repoUrl);
+    const prTitle = pr.title || 'Untitled PR';
+    const prUrl = pr.html_url || '#';
+    const buildStatus = pr.buildStatus || { state: 'unknown' };
+    const repoColorIdx = getRepoColorIndex(fullRepoName);
+    const showRepo = selectedRepos.size !== 1;
+    const repoMeta = showRepo ? (
+      <div className="rr-pr-repo">
+        <span className={`rr-radar-blip-sm repo-color-${repoColorIdx}`} />{fullRepoName}
+      </div>
+    ) : null;
+    const reviewSummary = getReviewSummary(pr);
+    const approvalCount = reviewSummary.approved || 0;
+    const commentCount = reviewSummary.commented || 0;
+    const approvalsDisplay = approvalCount > 0 ? <span>{approvalCount}</span> : <span className="rr-build-na">—</span>;
+    const commentsDisplay = commentCount > 0 ? <span>{commentCount}</span> : <span className="rr-build-na">—</span>;
+    const userAction = getUserAction(pr, currentUser);
+    const { dateStr: createdDate, timeStr: createdTime } = formatDateSplit(pr.created_at);
+    const { dateStr: updatedDate, timeStr: updatedTime } = formatDateSplit(pr.updated_at);
+
+    switch (key) {
+      case 'title':
+        return (
+          <td key={key} style={{ padding: '11px 12px', verticalAlign: 'middle' }}>
+            <div>
+              <a href={prUrl} target="_blank" className="rr-pr-title" title={prTitle}>{prTitle}</a>
+              {repoMeta}
+            </div>
+          </td>
+        );
+      case 'author':
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle' }}>
+            <span
+              className="rr-author-clickable"
+              onClick={(e) => { e.stopPropagation(); setActiveFilter('author', authorLogin); }}
+              title={`Filter by ${authorLogin}`}
+            >
+              <AuthorAvatar login={authorLogin} avatarUrl={pr.user?.avatar_url} />
+            </span>
+          </td>
+        );
+      case 'status':
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle' }}>
+            <span
+              className="rr-status-clickable"
+              onClick={(e) => { e.stopPropagation(); setActiveFilter('status', getStatusText(pr)); }}
+              title="Filter by status"
+            >
+              {getStatusBadge(pr)}
+            </span>
+          </td>
+        );
+      case 'myaction':
+        return <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', fontSize: 16, textAlign: 'center' }}>{userAction}</td>;
+      case 'approvals':
+        return <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center' }}>{approvalsDisplay}</td>;
+      case 'comments':
+        return <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center' }}>{commentsDisplay}</td>;
+      case 'labels':
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+            {pr.labels && pr.labels.length > 0 ? pr.labels.map((label) => (
+              <span
+                key={label.name}
+                className="inline-block rounded px-2 py-[3px] text-[10px] font-medium mr-1 mb-0.5 border border-border-faint rr-label-clickable"
+                style={{ backgroundColor: `#${label.color}33`, borderColor: `#${label.color}44` }}
+                onClick={(e) => { e.stopPropagation(); setActiveFilter('label', label.name); }}
+                title="Filter by label"
+              >
+                <span className="rr-label-text">{label.name}</span>
+              </span>
+            )) : <span className="rr-build-na">—</span>}
+          </td>
+        );
+      case 'build':
+        return <td key={key} style={{ padding: '11px 12px', verticalAlign: 'middle' }}>{getBuildText(pr)}</td>;
+      case 'created':
+        return (
+          <td key={key} className="rr-age" style={{ verticalAlign: 'middle' }}>
+            <div style={{ lineHeight: 1.3, textAlign: 'center' }}>
+              <div>{createdDate}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted-dim)' }}>{createdTime}</div>
+            </div>
+          </td>
+        );
+      case 'updated':
+        return (
+          <td key={key} className="rr-age" style={{ verticalAlign: 'middle' }}>
+            <div style={{ lineHeight: 1.3, textAlign: 'center' }}>
+              <div>{updatedDate}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted-dim)' }}>{updatedTime}</div>
+            </div>
+          </td>
+        );
+      case 'details':
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle' }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenDrawer(pr); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', transition: 'color 200ms', fontSize: 16 }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
+              title="more details"
+            >
+              ⋯
+            </button>
+          </td>
+        );
+      default:
+        return null;
+    }
+  }, [currentUser, selectedRepos, setActiveFilter, onOpenDrawer]);
+
+  const activeSort = currentSort[0];
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const draggingRef = useRef<string | null>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+  const thRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('reviewradar-column-widths') || '{}');
+      setColWidths(saved);
+    } catch {
+      setColWidths({});
+    }
+  }, []);
+
+  const beginResize = useCallback((e: React.MouseEvent, key: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const th = thRefs.current[key];
+    if (!th) return;
+    draggingRef.current = key;
+    startXRef.current = e.pageX;
+    startWidthRef.current = th.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    th.classList.add('rr-resizing');
+
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.pageX - startXRef.current;
+      const newWidth = Math.max(30, startWidthRef.current + delta);
+      th.style.width = newWidth + 'px';
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      th.classList.remove('rr-resizing');
+
+      const widths: Record<string, number> = {};
+      columnOrder.forEach((k) => {
+        const cell = thRefs.current[k];
+        if (cell && cell.style.width) {
+          widths[k] = parseInt(cell.style.width, 10);
+        }
+      });
+      setColWidths(widths);
+      localStorage.setItem('reviewradar-column-widths', JSON.stringify(widths));
+
+      setTimeout(() => {
+        draggingRef.current = null;
+      }, 100);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [columnOrder]);
+
+  return (
+    <div className="rr-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {columnOrder.map((key) => {
+              const meta = COLUMN_META[key];
+              if (!meta) return null;
+              const isSorted = activeSort?.column === meta.sortKey;
+              const classes = ['sortable', meta.narrow ? 'rr-col-narrow' : '', meta.sortKey ? '' : ''].filter(Boolean);
+              const savedWidth = colWidths[key];
+              const style: React.CSSProperties = { position: 'relative' };
+              if (savedWidth) style.width = savedWidth;
+              else if (meta.width) style.width = meta.width;
+
+              return (
+                <th
+                  key={key}
+                  ref={(el) => { thRefs.current[key] = el; }}
+                  data-col={key}
+                  className={`${classes.join(' ')} ${isSorted ? (activeSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}`}
+                  style={style}
+                  onClick={() => {
+                    if (draggingRef.current) return;
+                    meta.sortKey && useAppStore.getState().toggleSort(meta.sortKey);
+                  }}
+                >
+                  {meta.label}
+                  <div
+                    className="rr-resize-handle"
+                    onMouseDown={(e) => beginResize(e, key)}
+                  />
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredPRs.length === 0 ? (
+            <tr>
+              <td colSpan={columnOrder.length} style={{ padding: '64px 32px', textAlign: 'center', color: 'var(--muted-dim)' }}>
+                <div style={{ margin: '0 auto 16px', width: 48, height: 48, borderRadius: '50%', background: 'var(--cyan-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg style={{ color: 'var(--cyan)' }} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                </div>
+                <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>No Pull Requests Found</p>
+                <p style={{ fontSize: 12, color: 'var(--muted-dim)' }}>Try adjusting your filters or load PRs from a different repository.</p>
+              </td>
+            </tr>
+          ) : (
+            filteredPRs.map((pr) => {
+              const authorLogin = pr.user?.login || 'unknown';
+              const isOwned = authorLogin === currentUser;
+              const repoUrl = pr.repository_url || pr.url || '';
+              const fullRepoName = getRepoFullNameFromUrl(repoUrl);
+              const repoColorIdx = getRepoColorIndex(fullRepoName);
+              return (
+                <tr key={pr.id} className={`${isOwned ? 'owned-pr' : ''} repo-bg-${repoColorIdx}`}>
+                  {columnOrder.map((key) => renderCell(pr, key))}
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
