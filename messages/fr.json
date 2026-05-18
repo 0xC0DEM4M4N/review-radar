@@ -145,6 +145,7 @@
     "addRepos": "Ajouter des dépôts →",
     "fetchingHistorical": "Récupération des données historiques…",
     "fetchingHistoricalSub": "Veuillez patienter, cela peut prendre du temps si vous avez été occupé !",
+    "timeRemaining": "~{eta} restantes",
     "overview": "Vue d'ensemble",
     "opened": "Ouvertes",
     "closed": "Fermées",

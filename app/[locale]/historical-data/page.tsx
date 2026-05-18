@@ -58,6 +58,15 @@ interface PRSizeDetail {
   url: string;
 }
 
+function formatEta(ms: number): string {
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds < 1) return '<1s';
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+}
+
 function formatDate(d: Date): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -154,7 +163,7 @@ async function fetchBatch<T>(items: PRData[], fetchFn: (pr: PRData) => Promise<T
     results.push(...batchResults);
     if (statusFn) statusFn(Math.min(i + batchSize, items.length), items.length);
     if (i + batchSize < items.length) {
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 50));
     }
   }
   return results;
@@ -166,6 +175,8 @@ export default function HistoricalDataPage() {
   const [allTime, setAllTime] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<string>('');
+  const [progress, setProgress] = useState<number>(0);
+  const [etaText, setEtaText] = useState<string>('');
   const [isError, setIsError] = useState<boolean>(false);
   const [hasData, setHasData] = useState<boolean>(false);
   const [showGrid, setShowGrid] = useState<boolean>(false);
@@ -265,6 +276,8 @@ export default function HistoricalDataPage() {
   const loadHistoricalData = useCallback(async () => {
     setLoading(true);
     setStatusMsg('');
+    setProgress(0);
+    setEtaText('');
     setIsError(false);
     setShowGrid(false);
     setNoData(false);
@@ -295,12 +308,24 @@ export default function HistoricalDataPage() {
       return;
     }
 
+    const loadStart = Date.now();
+    const updateEta = (pct: number) => {
+      if (pct <= 1) { setEtaText(''); return; }
+      const elapsed = Date.now() - loadStart;
+      const totalEst = elapsed / (pct / 100);
+      const remaining = Math.max(0, totalEst - elapsed);
+      setEtaText(formatEta(remaining));
+    };
+
     try {
       setStatusMsg(t('fetchingPRs', { count: repos.length }));
       let allPRs: PRData[] = [];
-      for (const repo of repos) {
-        const repoPRs = await fetchRepoPRsAll(repo, pat);
+      for (let i = 0; i < repos.length; i++) {
+        const repoPRs = await fetchRepoPRsAll(repos[i], pat);
         allPRs.push(...repoPRs);
+        const pct = Math.round(((i + 1) / repos.length) * 10);
+        setProgress(pct);
+        updateEta(pct);
       }
 
       if (allPRs.length === 0) {
@@ -310,24 +335,42 @@ export default function HistoricalDataPage() {
         return;
       }
 
-      setStatusMsg(t('fetchingReviews', { count: allPRs.length }));
-      const reviewsList = await fetchBatch(allPRs, (pr) => fetchReviews(pr, pat), (done, total) => {
+      // Only fetch reviews for PRs created on or before the range end
+      const prsForReviews = range.allTime
+        ? allPRs
+        : allPRs.filter((pr) => !range.end || !pr.created_at || new Date(pr.created_at) <= range.end);
+
+      setStatusMsg(t('fetchingReviews', { count: prsForReviews.length }));
+      const reviewsList = await fetchBatch(prsForReviews, (pr) => fetchReviews(pr, pat), (done, total) => {
+        const pct = 10 + Math.round((done / total) * 45);
+        setProgress(pct);
+        updateEta(pct);
         setStatusMsg(t('fetchedReviews', { done, total }));
       });
       const reviewsMap: Record<number, Review[]> = {};
-      allPRs.forEach((pr, i) => {
+      prsForReviews.forEach((pr, i) => {
         reviewsMap[pr.id] = reviewsList[i] || [];
       });
 
-      setStatusMsg(t('fetchingFileSizes', { count: allPRs.length }));
-      const filesList = await fetchBatch(allPRs, (pr) => fetchPRFiles(pr, pat), (done, total) => {
+      // Only fetch files for PRs opened within the selected range
+      const prsForFiles = range.allTime
+        ? allPRs
+        : allPRs.filter((pr) => inRange(pr.created_at, range));
+
+      setStatusMsg(t('fetchingFileSizes', { count: prsForFiles.length }));
+      const filesList = await fetchBatch(prsForFiles, (pr) => fetchPRFiles(pr, pat), (done, total) => {
+        const pct = 55 + Math.round((done / total) * 45);
+        setProgress(pct);
+        updateEta(pct);
         setStatusMsg(t('fetchedFiles', { done, total }));
       });
       const filesMap: Record<number, PRFile[]> = {};
-      allPRs.forEach((pr, i) => {
+      prsForFiles.forEach((pr, i) => {
         filesMap[pr.id] = filesList[i] || [];
       });
 
+      setProgress(100);
+      setEtaText('');
       setStatusMsg('');
       setLoading(false);
       showData(allPRs, reviewsMap, filesMap, range);
@@ -865,6 +908,21 @@ export default function HistoricalDataPage() {
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 32px', flexDirection: 'column' }}>
           <LoadingIllustration width={240} height={160} />
+          {/* Progress bar */}
+          <div style={{ width: '280px', maxWidth: '100%', marginTop: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted)' }}>{statusMsg}</span>
+              <span style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--cyan)' }}>{progress}%</span>
+            </div>
+            <div style={{ height: '4px', background: 'var(--border-faint)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: 'var(--cyan)', borderRadius: '2px', width: `${progress}%`, transition: 'width 0.2s ease' }} />
+            </div>
+            {etaText && (
+              <div style={{ textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '10px', color: 'var(--muted-dim)', marginTop: '6px' }}>
+                {t('timeRemaining', { eta: etaText })}
+              </div>
+            )}
+          </div>
           <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--muted)', marginTop: '16px', letterSpacing: '0.05em', textAlign: 'center' }}>
             {t('fetchingHistorical')}
             <br />

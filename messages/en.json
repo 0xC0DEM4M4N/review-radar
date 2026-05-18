@@ -145,6 +145,7 @@
     "addRepos": "Add Repositories →",
     "fetchingHistorical": "Fetching historical data…",
     "fetchingHistoricalSub": "Please be patient, this could take some time if you have been busy!",
+    "timeRemaining": "~{eta} remaining",
     "overview": "Overview",
     "opened": "Opened",
     "closed": "Closed",
