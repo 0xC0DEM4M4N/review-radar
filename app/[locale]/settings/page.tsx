@@ -2,26 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Layout from '@/components/Layout';
+import { useTranslations } from 'next-intl';
 
 interface ColumnConfig {
   id: string;
   label: string;
   visible: boolean;
 }
-
-const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { id: 'pull-request', label: 'Pull request', visible: true },
-  { id: 'author', label: 'Author', visible: true },
-  { id: 'status', label: 'Status', visible: true },
-  { id: 'my-action', label: 'My Action', visible: true },
-  { id: 'approvals', label: 'Approvals', visible: true },
-  { id: 'comments', label: 'Comments', visible: true },
-  { id: 'labels', label: 'Labels', visible: true },
-  { id: 'build', label: 'Build', visible: true },
-  { id: 'created', label: 'Created', visible: true },
-  { id: 'updated', label: 'Updated', visible: true },
-  { id: 'details', label: 'Details', visible: true },
-];
 
 function loadJSON<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -44,6 +31,7 @@ function saveJSON(key: string, value: unknown) {
 
 export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
+  const t = useTranslations('settings');
 
   // GitHub PAT
   const [pat, setPat] = useState('');
@@ -62,9 +50,27 @@ export default function SettingsPage() {
   const [isLight, setIsLight] = useState(false);
 
   // Columns
-  const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
+  const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragOverIdRef = useRef<string | null>(null);
+
+  // Build default columns with translated labels
+  useEffect(() => {
+    const defaultColumns: ColumnConfig[] = [
+      { id: 'pull-request', label: t('colPullRequest'), visible: true },
+      { id: 'author', label: t('colAuthor'), visible: true },
+      { id: 'status', label: t('colStatus'), visible: true },
+      { id: 'my-action', label: t('colMyAction'), visible: true },
+      { id: 'approvals', label: t('colApprovals'), visible: true },
+      { id: 'comments', label: t('colComments'), visible: true },
+      { id: 'labels', label: t('colLabels'), visible: true },
+      { id: 'build', label: t('colBuild'), visible: true },
+      { id: 'created', label: t('colCreated'), visible: true },
+      { id: 'updated', label: t('colUpdated'), visible: true },
+      { id: 'details', label: t('colDetails'), visible: true },
+    ];
+    setColumns(loadJSON<ColumnConfig[]>('reviewradar-columns', defaultColumns));
+  }, [t]);
 
   // Load from localStorage
   useEffect(() => {
@@ -82,8 +88,6 @@ export default function SettingsPage() {
 
     const light = document.documentElement.classList.contains('light-mode');
     setIsLight(light);
-
-    setColumns(loadJSON<ColumnConfig[]>('reviewradar-columns', DEFAULT_COLUMNS));
   }, []);
 
   // Save handlers
@@ -202,19 +206,32 @@ export default function SettingsPage() {
   };
 
   const resetColumns = () => {
-    setColumns(DEFAULT_COLUMNS);
-    saveJSON('reviewradar-columns', DEFAULT_COLUMNS);
+    const defaultColumns: ColumnConfig[] = [
+      { id: 'pull-request', label: t('colPullRequest'), visible: true },
+      { id: 'author', label: t('colAuthor'), visible: true },
+      { id: 'status', label: t('colStatus'), visible: true },
+      { id: 'my-action', label: t('colMyAction'), visible: true },
+      { id: 'approvals', label: t('colApprovals'), visible: true },
+      { id: 'comments', label: t('colComments'), visible: true },
+      { id: 'labels', label: t('colLabels'), visible: true },
+      { id: 'build', label: t('colBuild'), visible: true },
+      { id: 'created', label: t('colCreated'), visible: true },
+      { id: 'updated', label: t('colUpdated'), visible: true },
+      { id: 'details', label: t('colDetails'), visible: true },
+    ];
+    setColumns(defaultColumns);
+    saveJSON('reviewradar-columns', defaultColumns);
   };
 
   // Data management
   const clearRepos = () => {
-    if (!window.confirm('Clear all saved repositories?')) return;
+    if (!window.confirm(t('confirmClearRepos'))) return;
     setRepos([]);
     localStorage.removeItem('github-repos');
   };
 
   const clearAllData = () => {
-    if (!window.confirm('This will clear ALL locally stored data. Are you sure?')) return;
+    if (!window.confirm(t('confirmClearAll'))) return;
     localStorage.clear();
     setRepos([]);
     setPat('');
@@ -222,14 +239,14 @@ export default function SettingsPage() {
     setAutoRefresh(false);
     setRefreshInterval(5);
     setBrowserNotifs(false);
-    setColumns(DEFAULT_COLUMNS);
+    resetColumns();
   };
 
   if (!mounted) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-full">
-          <div className="text-muted">Loading settings…</div>
+          <div className="text-muted">{t('loading')}</div>
         </div>
       </Layout>
     );
@@ -239,12 +256,12 @@ export default function SettingsPage() {
     <Layout>
     <div className="px-6 py-8">
       <div className="mx-auto max-w-3xl space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-cyan">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-cyan">{t('title')}</h1>
 
         {/* GitHub Access Token */}
         <section className="rounded-xl border border-border-faint bg-surface p-5">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
-            GitHub Access Token
+            {t('patTitle')}
           </h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
@@ -254,25 +271,25 @@ export default function SettingsPage() {
                 setPat(e.target.value);
                 setPatSaved(false);
               }}
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              placeholder={t('patPlaceholder')}
               className="w-full flex-1 rounded-lg border border-border-faint bg-ink-light px-3 py-2 text-sm text-text-primary outline-none placeholder:text-muted-dim focus:border-cyan focus:ring-1 focus:ring-cyan"
             />
             <button
               onClick={savePat}
               className="shrink-0 rounded-lg bg-cyan-dim px-4 py-2 text-sm font-medium text-cyan transition hover:bg-cyan-mid"
             >
-              Save
+              {t('save')}
             </button>
           </div>
           {patSaved && (
-            <p className="mt-2 text-xs text-green">Token saved successfully.</p>
+            <p className="mt-2 text-xs text-green">{t('patSaved')}</p>
           )}
         </section>
 
         {/* Saved Repositories */}
         <section className="rounded-xl border border-border-faint bg-surface p-5">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
-            Saved Repositories
+            {t('reposTitle')}
           </h2>
           <div className="flex gap-2">
             <input
@@ -280,19 +297,19 @@ export default function SettingsPage() {
               value={repoInput}
               onChange={(e) => setRepoInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addRepo()}
-              placeholder="owner/repo"
+              placeholder={t('repoPlaceholder')}
               className="w-full flex-1 rounded-lg border border-border-faint bg-ink-light px-3 py-2 text-sm text-text-primary outline-none placeholder:text-muted-dim focus:border-cyan focus:ring-1 focus:ring-cyan"
             />
             <button
               onClick={addRepo}
               className="shrink-0 rounded-lg bg-cyan-dim px-4 py-2 text-sm font-medium text-cyan transition hover:bg-cyan-mid"
             >
-              Add
+              {t('add')}
             </button>
           </div>
           <div className="mt-3 space-y-2">
             {repos.length === 0 && (
-              <p className="text-sm text-muted-dim">No repositories saved yet.</p>
+              <p className="text-sm text-muted-dim">{t('noRepos')}</p>
             )}
             {repos.map((repo) => (
               <div
@@ -306,7 +323,7 @@ export default function SettingsPage() {
                   aria-label={`Remove ${repo}`}
                   title="Remove"
                 >
-                  ✕
+                  {t('remove')}
                 </button>
               </div>
             ))}
@@ -316,7 +333,7 @@ export default function SettingsPage() {
         {/* Auto Refresh & Notifications */}
         <section className="rounded-xl border border-border-faint bg-surface p-5">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
-            Auto Refresh & Notifications
+            {t('autoRefreshTitle')}
           </h2>
           <div className="space-y-4">
             <label className="flex items-center gap-3">
@@ -326,11 +343,11 @@ export default function SettingsPage() {
                 onChange={(e) => handleAutoRefreshChange(e.target.checked)}
                 className="h-4 w-4 accent-cyan"
               />
-              <span className="text-sm text-text-primary">Enable auto-refresh</span>
+              <span className="text-sm text-text-primary">{t('enableAutoRefresh')}</span>
             </label>
 
             <div className="flex items-center gap-3">
-              <span className="text-sm text-muted">Refresh interval</span>
+              <span className="text-sm text-muted">{t('refreshInterval')}</span>
               <input
                 type="number"
                 min={1}
@@ -339,7 +356,7 @@ export default function SettingsPage() {
                 onChange={(e) => handleRefreshIntervalChange(Number(e.target.value))}
                 className="w-20 rounded-lg border border-border-faint bg-ink-light px-3 py-2 text-sm text-text-primary outline-none focus:border-cyan focus:ring-1 focus:ring-cyan"
               />
-              <span className="text-sm text-muted">minutes</span>
+              <span className="text-sm text-muted">{t('minutes')}</span>
             </div>
 
             <label className="flex items-center gap-3">
@@ -349,14 +366,14 @@ export default function SettingsPage() {
                 onChange={(e) => handleBrowserNotifsChange(e.target.checked)}
                 className="h-4 w-4 accent-cyan"
               />
-              <span className="text-sm text-text-primary">Browser notifications</span>
+              <span className="text-sm text-text-primary">{t('browserNotifications')}</span>
             </label>
           </div>
         </section>
 
         {/* Theme */}
         <section className="rounded-xl border border-border-faint bg-surface p-5">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">Theme</h2>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">{t('themeTitle')}</h2>
           <div className="flex gap-2">
             <button
               onClick={() => toggleTheme(false)}
@@ -366,7 +383,7 @@ export default function SettingsPage() {
                   : 'border border-border-faint text-muted hover:text-text-primary'
               }`}
             >
-              Dark
+              {t('dark')}
             </button>
             <button
               onClick={() => toggleTheme(true)}
@@ -376,7 +393,7 @@ export default function SettingsPage() {
                   : 'border border-border-faint text-muted hover:text-text-primary'
               }`}
             >
-              Light
+              {t('light')}
             </button>
           </div>
         </section>
@@ -384,7 +401,7 @@ export default function SettingsPage() {
         {/* Table Columns */}
         <section className="rounded-xl border border-border-faint bg-surface p-5">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
-            Table Columns
+            {t('columnsTitle')}
           </h2>
           <div className="space-y-1">
             {columns.map((col) => (
@@ -401,8 +418,8 @@ export default function SettingsPage() {
                     : 'border-border-faint bg-ink-light hover:border-border-subtle'
                 }`}
               >
-                <span className="select-none text-muted" title="Drag to reorder">
-                  ☰
+                <span className="select-none text-muted" title={t('dragHandleTitle')}>
+                  {t('dragHandle')}
                 </span>
                 <input
                   type="checkbox"
@@ -419,13 +436,13 @@ export default function SettingsPage() {
               onClick={saveColumns}
               className="rounded-lg bg-cyan-dim px-4 py-2 text-sm font-medium text-cyan transition hover:bg-cyan-mid"
             >
-              Save
+              {t('saveColumns')}
             </button>
             <button
               onClick={resetColumns}
               className="rounded-lg border border-border-faint px-4 py-2 text-sm font-medium text-muted transition hover:text-text-primary"
             >
-              Reset
+              {t('resetColumns')}
             </button>
           </div>
         </section>
@@ -433,20 +450,20 @@ export default function SettingsPage() {
         {/* Data Management */}
         <section className="rounded-xl border border-border-faint bg-surface p-5">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
-            Data Management
+            {t('dataManagementTitle')}
           </h2>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={clearRepos}
               className="rounded-lg border border-border-faint px-4 py-2 text-sm font-medium text-muted transition hover:text-text-primary"
             >
-              Clear saved repositories
+              {t('clearRepos')}
             </button>
             <button
               onClick={clearAllData}
               className="rounded-lg bg-red/10 px-4 py-2 text-sm font-medium text-red transition hover:bg-red/20"
             >
-              Clear All Data
+              {t('clearAllData')}
             </button>
           </div>
         </section>

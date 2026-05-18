@@ -226,6 +226,4 @@
     </line>
   </g>
 
-  <!-- Loading text -->
-  <text x="120" y="152" text-anchor="middle" font-family="'Space Mono', monospace" font-size="9" fill="#22d3ee" opacity="0.6" letter-spacing="0.1em">LOADING</text>
 </svg>

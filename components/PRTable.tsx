@@ -9,6 +9,7 @@ import {
   getRepoNameFromUrl,
   getRepoColorIndex,
 } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 
 function getReviewSummary(pr: PR) {
   const reviews = pr.reviews || [];
@@ -38,49 +39,49 @@ function getConsolidatedReviews(pr: PR) {
   return Object.values(byUser);
 }
 
-function getStatusText(pr: PR) {
+type StatusKey = 'changesRequested' | 'buildFail' | 'needsRebase' | 'approved' | 'awaitingApproval' | 'draft' | 'open';
+
+function getStatusKey(pr: PR): StatusKey {
   const latest = getConsolidatedReviews(pr);
   const approvalCount = latest.filter((r: any) => r.state === 'APPROVED').length;
   const hasChanges = latest.some((r: any) => r.state === 'CHANGES_REQUESTED');
   const buildFailed = pr.buildStatus?.state === 'failure';
   const mergeConflict = pr.mergeable_state === 'dirty';
   if (hasChanges || buildFailed || mergeConflict) {
-    return hasChanges ? 'Changes req.' : buildFailed ? 'Build fail' : 'Needs rebase';
+    return hasChanges ? 'changesRequested' : buildFailed ? 'buildFail' : 'needsRebase';
   }
-  if (approvalCount >= 2) return 'Approved';
-  if (latest.length > 0) return 'Awaiting approval';
-  if (pr.draft) return 'Draft';
-  return 'Open';
+  if (approvalCount >= 2) return 'approved';
+  if (latest.length > 0) return 'awaitingApproval';
+  if (pr.draft) return 'draft';
+  return 'open';
 }
 
-function getStatusBadge(pr: PR) {
-  const text = getStatusText(pr);
-  const map: Record<string, string> = {
-    'Changes req.': 'rr-badge-blocked',
-    'Build fail': 'rr-badge-blocked',
-    'Needs rebase': 'rr-badge-blocked',
-    'Approved': 'rr-badge-approved',
-    'Awaiting approval': 'rr-badge-review',
-    'Draft': 'rr-badge-draft',
-    'Open': 'rr-badge-open',
-  };
-  return <span className={`rr-badge ${map[text] || 'rr-badge-open'}`}><span className="rr-badge-dot" />{text}</span>;
-}
+const STATUS_BADGE_MAP: Record<StatusKey, string> = {
+  changesRequested: 'rr-badge-blocked',
+  buildFail: 'rr-badge-blocked',
+  needsRebase: 'rr-badge-blocked',
+  approved: 'rr-badge-approved',
+  awaitingApproval: 'rr-badge-review',
+  draft: 'rr-badge-draft',
+  open: 'rr-badge-open',
+};
 
-function getBuildText(pr: PR) {
+type BuildKey = 'pass' | 'fail' | 'running' | 'pending' | 'na';
+
+function getBuildKey(pr: PR): BuildKey {
   const state = pr.buildStatus?.state;
-  if (state === 'success') return <span className="rr-build-ok">✓ pass</span>;
-  if (state === 'failure') return <span className="rr-build-fail">✗ fail</span>;
-  if (state === 'in_progress') return <span className="rr-build-run">⟳ running</span>;
-  if (state === 'pending') return <span className="rr-build-run">⟳ pending</span>;
-  return <span className="rr-build-na">—</span>;
+  if (state === 'success') return 'pass';
+  if (state === 'failure') return 'fail';
+  if (state === 'in_progress') return 'running';
+  if (state === 'pending') return 'pending';
+  return 'na';
 }
 
 function getUserAction(pr: PR, currentUser: string | null) {
   const review = pr.reviews?.find((r) => r.user?.login === currentUser);
   if (!review) return '';
-  if (review.state === 'APPROVED') return <span title="You approved">✓</span>;
-  if (review.state === 'COMMENTED') return <span title="You left comments">💬</span>;
+  if (review.state === 'APPROVED') return 'approved';
+  if (review.state === 'COMMENTED') return 'commented';
   return '';
 }
 
@@ -107,6 +108,23 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     columnOrder,
     setActiveFilter,
   } = useAppStore();
+
+  const t = useTranslations('components.prtable');
+  const tc = useTranslations('common');
+
+  const columnLabels: Record<ColumnKey, string> = {
+    title: t('columns.pullRequest'),
+    author: t('columns.author'),
+    status: t('columns.status'),
+    myaction: t('columns.myAction'),
+    approvals: t('columns.approvals'),
+    comments: t('columns.comments'),
+    labels: t('columns.labels'),
+    build: t('columns.build'),
+    created: t('columns.created'),
+    updated: t('columns.updated'),
+    details: t('columns.details'),
+  };
 
   const filteredPRs = useMemo(() => {
     let prs = allPRs.filter((pr) => {
@@ -150,7 +168,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
       prs = prs.filter((pr) => pr.labels?.some((l) => l.name === activeFilters.label));
     }
     if (activeFilters.status) {
-      prs = prs.filter((pr) => getStatusText(pr) === activeFilters.status);
+      prs = prs.filter((pr) => getStatusKey(pr) === activeFilters.status);
     }
     if (activeFilters.author) {
       prs = prs.filter((pr) => (pr.user?.login || '') === activeFilters.author);
@@ -175,8 +193,8 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               bVal = (b.user?.login || '').toLowerCase();
               break;
             case 'status':
-              aVal = getStatusText(a).toLowerCase();
-              bVal = getStatusText(b).toLowerCase();
+              aVal = getStatusKey(a);
+              bVal = getStatusKey(b);
               break;
             case 'approvals':
               aVal = getReviewSummary(a).approved || 0;
@@ -225,13 +243,12 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
   }, [allPRs, currentUser, currentFilter, currentSort, activeFilters, selectedRepos]);
 
   const renderCell = useCallback((pr: PR, key: ColumnKey) => {
-    const authorLogin = pr.user?.login || 'unknown';
+    const authorLogin = pr.user?.login || tc('unknown');
     const isOwned = authorLogin === currentUser;
     const repoUrl = pr.repository_url || pr.url || '';
     const fullRepoName = getRepoFullNameFromUrl(repoUrl);
-    const prTitle = pr.title || 'Untitled PR';
+    const prTitle = pr.title || tc('untitledPR');
     const prUrl = pr.html_url || '#';
-    const buildStatus = pr.buildStatus || { state: 'unknown' };
     const repoColorIdx = getRepoColorIndex(fullRepoName);
     const showRepo = selectedRepos.size !== 1;
     const repoMeta = showRepo ? (
@@ -242,11 +259,15 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     const reviewSummary = getReviewSummary(pr);
     const approvalCount = reviewSummary.approved || 0;
     const commentCount = reviewSummary.commented || 0;
-    const approvalsDisplay = approvalCount > 0 ? <span>{approvalCount}</span> : <span className="rr-build-na">—</span>;
-    const commentsDisplay = commentCount > 0 ? <span>{commentCount}</span> : <span className="rr-build-na">—</span>;
-    const userAction = getUserAction(pr, currentUser);
-    const { dateStr: createdDate, timeStr: createdTime } = formatDateSplit(pr.created_at);
-    const { dateStr: updatedDate, timeStr: updatedTime } = formatDateSplit(pr.updated_at);
+    const approvalsDisplay = approvalCount > 0 ? <span>{approvalCount}</span> : <span className="rr-build-na">{t('build.na')}</span>;
+    const commentsDisplay = commentCount > 0 ? <span>{commentCount}</span> : <span className="rr-build-na">{t('build.na')}</span>;
+    const userActionKey = getUserAction(pr, currentUser);
+    const userAction = userActionKey === 'approved' ? <span title={t('userActionApproved')}>✓</span> : userActionKey === 'commented' ? <span title={t('userActionCommented')}>💬</span> : '';
+    const todayLabel = tc('today');
+    const { dateStr: createdDate, timeStr: createdTime } = formatDateSplit(pr.created_at, todayLabel);
+    const { dateStr: updatedDate, timeStr: updatedTime } = formatDateSplit(pr.updated_at, todayLabel);
+    const statusKey = getStatusKey(pr);
+    const buildKey = getBuildKey(pr);
 
     switch (key) {
       case 'title':
@@ -264,7 +285,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
             <span
               className="rr-author-clickable"
               onClick={(e) => { e.stopPropagation(); setActiveFilter('author', authorLogin); }}
-              title={`Filter by ${authorLogin}`}
+              title={tc('filterByAuthor', { author: authorLogin })}
             >
               <AuthorAvatar login={authorLogin} avatarUrl={pr.user?.avatar_url} />
             </span>
@@ -275,10 +296,10 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
           <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle' }}>
             <span
               className="rr-status-clickable"
-              onClick={(e) => { e.stopPropagation(); setActiveFilter('status', getStatusText(pr)); }}
-              title="Filter by status"
+              onClick={(e) => { e.stopPropagation(); setActiveFilter('status', statusKey); }}
+              title={tc('filterByStatus')}
             >
-              {getStatusBadge(pr)}
+              <span className={`rr-badge ${STATUS_BADGE_MAP[statusKey] || 'rr-badge-open'}`}><span className="rr-badge-dot" />{t(`status.${statusKey}`)}</span>
             </span>
           </td>
         );
@@ -297,15 +318,21 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
                 className="inline-block rounded px-2 py-[3px] text-[10px] font-medium mr-1 mb-0.5 border border-border-faint rr-label-clickable"
                 style={{ backgroundColor: `#${label.color}33`, borderColor: `#${label.color}44` }}
                 onClick={(e) => { e.stopPropagation(); setActiveFilter('label', label.name); }}
-                title="Filter by label"
+                title={tc('filterByLabel')}
               >
                 <span className="rr-label-text">{label.name}</span>
               </span>
-            )) : <span className="rr-build-na">—</span>}
+            )) : <span className="rr-build-na">{t('build.na')}</span>}
           </td>
         );
       case 'build':
-        return <td key={key} style={{ padding: '11px 12px', verticalAlign: 'middle' }}>{getBuildText(pr)}</td>;
+        return (
+          <td key={key} style={{ padding: '11px 12px', verticalAlign: 'middle' }}>
+            <span className={buildKey === 'pass' ? 'rr-build-ok' : buildKey === 'fail' ? 'rr-build-fail' : buildKey === 'running' || buildKey === 'pending' ? 'rr-build-run' : 'rr-build-na'}>
+              {t(`build.${buildKey}`)}
+            </span>
+          </td>
+        );
       case 'created':
         return (
           <td key={key} className="rr-age" style={{ verticalAlign: 'middle' }}>
@@ -332,7 +359,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', transition: 'color 200ms', fontSize: 16 }}
               onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
               onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
-              title="more details"
+              title={tc('moreDetails')}
             >
               ⋯
             </button>
@@ -341,7 +368,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
       default:
         return null;
     }
-  }, [currentUser, selectedRepos, setActiveFilter, onOpenDrawer]);
+  }, [currentUser, selectedRepos, setActiveFilter, onOpenDrawer, t, tc]);
 
   const activeSort = currentSort[0];
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
@@ -430,7 +457,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
                     meta.sortKey && useAppStore.getState().toggleSort(meta.sortKey);
                   }}
                 >
-                  {meta.label}
+                  {columnLabels[key]}
                   <div
                     className="rr-resize-handle"
                     onMouseDown={(e) => beginResize(e, key)}
@@ -447,13 +474,13 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
                 <div style={{ margin: '0 auto 16px', width: 48, height: 48, borderRadius: '50%', background: 'var(--cyan-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg style={{ color: 'var(--cyan)' }} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                 </div>
-                <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>No Pull Requests Found</p>
-                <p style={{ fontSize: 12, color: 'var(--muted-dim)' }}>Try adjusting your filters or load PRs from a different repository.</p>
+                <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>{t('noPRsTitle')}</p>
+                <p style={{ fontSize: 12, color: 'var(--muted-dim)' }}>{t('noPRsDescription')}</p>
               </td>
             </tr>
           ) : (
             filteredPRs.map((pr) => {
-              const authorLogin = pr.user?.login || 'unknown';
+              const authorLogin = pr.user?.login || tc('unknown');
               const isOwned = authorLogin === currentUser;
               const repoUrl = pr.repository_url || pr.url || '';
               const fullRepoName = getRepoFullNameFromUrl(repoUrl);

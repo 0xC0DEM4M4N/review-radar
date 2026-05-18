@@ -51,18 +51,18 @@ export const DEFAULT_COLUMNS: ColumnKey[] = [
   'details',
 ];
 
-export const COLUMN_META: Record<ColumnKey, { label: string; sortKey: string | null; width: string | null; narrow: boolean }> = {
-  title: { label: 'Pull request', sortKey: 'title', width: null, narrow: false },
-  author: { label: 'Author', sortKey: 'author', width: '45px', narrow: true },
-  status: { label: 'Status', sortKey: 'status', width: '100px', narrow: true },
-  myaction: { label: 'My Action', sortKey: 'myaction', width: '45px', narrow: true },
-  approvals: { label: 'Approvals', sortKey: 'approvals', width: '75px', narrow: true },
-  comments: { label: 'Comments', sortKey: 'comments', width: '75px', narrow: true },
-  labels: { label: 'Labels', sortKey: 'labels', width: '130px', narrow: true },
-  build: { label: 'Build', sortKey: 'buildStatus', width: '70px', narrow: false },
-  created: { label: 'Created', sortKey: 'created', width: '60px', narrow: true },
-  updated: { label: 'Updated', sortKey: 'updated', width: '60px', narrow: true },
-  details: { label: '', sortKey: null, width: '45px', narrow: true },
+export const COLUMN_META: Record<ColumnKey, { sortKey: string | null; width: string | null; narrow: boolean }> = {
+  title: { sortKey: 'title', width: null, narrow: false },
+  author: { sortKey: 'author', width: '45px', narrow: true },
+  status: { sortKey: 'status', width: '100px', narrow: true },
+  myaction: { sortKey: 'myaction', width: '45px', narrow: true },
+  approvals: { sortKey: 'approvals', width: '75px', narrow: true },
+  comments: { sortKey: 'comments', width: '75px', narrow: true },
+  labels: { sortKey: 'labels', width: '130px', narrow: true },
+  build: { sortKey: 'buildStatus', width: '70px', narrow: false },
+  created: { sortKey: 'created', width: '60px', narrow: true },
+  updated: { sortKey: 'updated', width: '60px', narrow: true },
+  details: { sortKey: null, width: '45px', narrow: true },
 };
 
 interface AppState {

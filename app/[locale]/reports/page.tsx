@@ -2,9 +2,11 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import Chart from 'chart.js/auto';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
+import { useTranslations } from 'next-intl';
 
 const CHART_COLORS = ['#22d3ee', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#10b981', '#f97316'];
 
@@ -169,24 +171,24 @@ async function fetchBuildStatus(pr: PR, pat: string): Promise<BuildStatus> {
   }
 }
 
-async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void): Promise<PR[]> {
+async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t: any): Promise<PR[]> {
   const allRepos = getStoredRepos();
   const selectedRepos = getSelectedRepos();
   const repos = selectedRepos.length > 0 ? selectedRepos : allRepos;
   let rawPRs: PR[] = [];
 
   if (repos.length > 0) {
-    setStatusMsg(`Fetching PRs from ${repos.length} repo${repos.length !== 1 ? 's' : ''}…`);
+    setStatusMsg(t('fetchingPRs', { count: repos.length }));
     const chunks = await Promise.all(repos.map((r) => fetchRepoPRs(r, pat)));
     rawPRs = chunks.flat();
   } else {
-    setStatusMsg('Fetching your PRs from GitHub…');
+    setStatusMsg(t('fetchingYourPRs'));
     rawPRs = await fetchUserSearchPRs(pat);
   }
 
   if (rawPRs.length === 0) return [];
 
-  setStatusMsg(`Fetching reviews for ${rawPRs.length} PRs…`);
+  setStatusMsg(t('fetchingReviews', { count: rawPRs.length }));
   const withReviews: PR[] = [];
   for (let i = 0; i < rawPRs.length; i += 10) {
     const batch = rawPRs.slice(i, i + 10);
@@ -194,10 +196,10 @@ async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void): P
       batch.map((pr) => fetchReviews(pr, pat).then((reviews) => ({ ...pr, reviews })))
     );
     withReviews.push(...resolved);
-    if (i + 10 < rawPRs.length) setStatusMsg(`Fetched reviews ${Math.min(i + 10, rawPRs.length)} / ${rawPRs.length}…`);
+    if (i + 10 < rawPRs.length) setStatusMsg(t('fetchedReviews', { done: Math.min(i + 10, rawPRs.length), total: rawPRs.length }));
   }
 
-  setStatusMsg(`Fetching build status for ${withReviews.length} PRs…`);
+  setStatusMsg(t('fetchingBuildStatus', { count: withReviews.length }));
   const withBuildStatus: PR[] = [];
   for (let i = 0; i < withReviews.length; i += 10) {
     const batch = withReviews.slice(i, i + 10);
@@ -206,7 +208,7 @@ async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void): P
     );
     withBuildStatus.push(...resolved);
     if (i + 10 < withReviews.length)
-      setStatusMsg(`Fetched build status ${Math.min(i + 10, withReviews.length)} / ${withReviews.length}…`);
+      setStatusMsg(t('fetchedBuildStatus', { done: Math.min(i + 10, withReviews.length), total: withReviews.length }));
   }
   return withBuildStatus;
 }
@@ -238,7 +240,12 @@ export default function ReportsPage() {
   const [statusError, setStatusError] = useState(false);
   const [prs, setPRs] = useState<PR[]>([]);
   const [view, setView] = useState<'grid' | 'noData' | 'noPat' | 'noRepos' | 'initial'>('initial');
-  const [subtitle, setSubtitle] = useState('Current snapshot of your pull requests');
+  const [subtitle, setSubtitle] = useState('');
+
+  const params = useParams();
+  const locale = (params?.locale as string) || 'en';
+  const t = useTranslations('reports');
+  const tc = useTranslations('common');
 
   const chartStatusRef = useRef<HTMLCanvasElement | null>(null);
   const chartStatusInstance = useRef<Chart | null>(null);
@@ -257,7 +264,8 @@ export default function ReportsPage() {
     }
     Chart.defaults.font.family = "'Space Mono', monospace";
     Chart.defaults.font.size = 11;
-  }, []);
+    setSubtitle(t('defaultSubtitle'));
+  }, [t]);
 
   const destroyCharts = useCallback(() => {
     if (chartStatusInstance.current) {
@@ -287,18 +295,18 @@ export default function ReportsPage() {
   const renderStatusChart = useCallback(
     (data: PR[]) => {
       destroyCharts();
-      const statusCounts: Record<string, number> = { Open: 0, 'In review': 0, Approved: 0, Blocked: 0, Draft: 0 };
+      const statusCounts: Record<string, number> = { open: 0, inReview: 0, approved: 0, blocked: 0, draft: 0 };
       data.forEach((pr) => {
         const reviews = pr.reviews || [];
         const hasApproval = reviews.some((r) => r.state === 'APPROVED');
         const hasChanges = reviews.some((r) => r.state === 'CHANGES_REQUESTED');
         const mergeConflict = pr.mergeable_state === 'dirty' || pr.mergeable === false;
 
-        if (hasChanges || mergeConflict) statusCounts['Blocked']++;
-        else if (hasApproval) statusCounts['Approved']++;
-        else if (reviews.length > 0) statusCounts['In review']++;
-        else if (pr.draft) statusCounts['Draft']++;
-        else statusCounts['Open']++;
+        if (hasChanges || mergeConflict) statusCounts['blocked']++;
+        else if (hasApproval) statusCounts['approved']++;
+        else if (reviews.length > 0) statusCounts['inReview']++;
+        else if (pr.draft) statusCounts['draft']++;
+        else statusCounts['open']++;
       });
 
       const statusEntries = Object.entries(statusCounts).filter(([, v]) => v > 0);
@@ -310,7 +318,7 @@ export default function ReportsPage() {
       chartStatusInstance.current = new Chart(el, {
         type: 'pie',
         data: {
-          labels: statusEntries.map((e) => e[0]),
+          labels: statusEntries.map((e) => t(`statusLabel.${e[0]}`)),
           datasets: [
             {
               data: statusEntries.map((e) => e[1]),
@@ -332,7 +340,7 @@ export default function ReportsPage() {
         },
       });
     },
-    [destroyCharts]
+    [destroyCharts, t]
   );
 
   const renderMetrics = useCallback((data: PR[]) => {
@@ -356,14 +364,14 @@ export default function ReportsPage() {
   const renderPersonChart = useCallback((data: PR[]) => {
     const byPerson: Record<string, number> = {};
     data.forEach((pr) => {
-      const author = pr.user?.login || 'unknown';
+      const author = pr.user?.login || tc('unknown');
       byPerson[author] = (byPerson[author] || 0) + 1;
     });
     const sorted = Object.entries(byPerson)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 16);
     return sorted;
-  }, []);
+  }, [tc]);
 
   const renderLabelsChart = useCallback((data: PR[]) => {
     const byLabel: Record<string, number> = {};
@@ -396,7 +404,7 @@ export default function ReportsPage() {
       if (filteredCached.length > 0) {
         showData(filteredCached);
         setLoading(false);
-        setStatus('Using cached data — add a GitHub token in Settings to fetch live data.', false);
+        setStatus(t('cachedData'), false);
         return;
       } else {
         setView('noRepos');
@@ -415,7 +423,7 @@ export default function ReportsPage() {
 
     // Fetch fresh data if we have a PAT
     try {
-      const fetched = await fetchLivePRs(pat, setStatusMsg);
+      const fetched = await fetchLivePRs(pat, setStatusMsg, t);
       if (fetched.length > 0) {
         try {
           const stripped = stripLargeDataForStorage(fetched);
@@ -425,17 +433,17 @@ export default function ReportsPage() {
         }
         showData(fetched);
       } else {
-        setStatus('No open PRs found', false);
+        setStatus(t('noOpenPRs'), false);
         setView('noData');
       }
     } catch (e) {
       console.error('Load error:', e);
-      setStatus('Error loading data: ' + (e as Error).message, true);
+      setStatus(t('errorLoading', { message: (e as Error).message }), true);
       setView('noData');
     }
 
     setLoading(false);
-  }, [destroyCharts, setStatus, showData]);
+  }, [destroyCharts, setStatus, showData, t]);
 
   // Re-render charts whenever PRs change
   useEffect(() => {
@@ -457,7 +465,7 @@ export default function ReportsPage() {
     return (
       <Layout>
         <div className="flex items-center justify-center h-full">
-          <div style={{ color: 'var(--muted)' }}>Loading…</div>
+          <div style={{ color: 'var(--muted)' }}>{t('loading')}</div>
         </div>
       </Layout>
     );
@@ -479,7 +487,7 @@ export default function ReportsPage() {
             </svg>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 className="rr-header-title">Status Report</h1>
+            <h1 className="rr-header-title">{t('title')}</h1>
             <p className="rr-header-sub">{subtitle}</p>
           </div>
           <div className="rr-header-actions">
@@ -497,7 +505,7 @@ export default function ReportsPage() {
               >
                 <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" />
               </svg>
-              Refresh
+              {t('refresh')}
             </button>
           </div>
         </div>
@@ -534,7 +542,7 @@ export default function ReportsPage() {
                 letterSpacing: '0.05em',
               }}
             >
-              Fetching data...
+              {t('fetchingData')}
             </p>
           </div>
         )}
@@ -559,9 +567,9 @@ export default function ReportsPage() {
               </svg>
             </div>
             <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 14, color: 'var(--text-primary)', marginBottom: 8 }}>
-              Loading…
+              {t('noDataTitle')}
             </p>
-            <p style={{ fontSize: 13, color: 'var(--muted)' }}>Fetching your pull requests from GitHub.</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)' }}>{t('noDataDescription')}</p>
           </div>
         )}
 
@@ -596,13 +604,13 @@ export default function ReportsPage() {
               </svg>
             </div>
             <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 14, color: 'var(--text-primary)', marginBottom: 8 }}>
-              No GitHub token configured
+              {t('noPatTitle')}
             </p>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
-              Add your Personal Access Token in Settings to fetch live data.
+              {t('noPatDescription')}
             </p>
-            <Link href="/settings" className="rr-btn-primary" style={{ textDecoration: 'none' }}>
-              Go to Settings
+            <Link href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+              {t('goToSettings')}
             </Link>
           </div>
         )}
@@ -636,13 +644,13 @@ export default function ReportsPage() {
               </svg>
             </div>
             <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 14, color: 'var(--text-primary)', marginBottom: 8 }}>
-              No repositories selected
+              {t('noReposTitle')}
             </p>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
-              Add repositories in Settings to start tracking pull requests.
+              {t('noReposDescription')}
             </p>
-            <Link href="/settings" className="rr-btn-primary" style={{ textDecoration: 'none' }}>
-              Add Repositories →
+            <Link href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+              {t('addRepos')}
             </Link>
           </div>
         )}
@@ -651,7 +659,7 @@ export default function ReportsPage() {
         {!loading && view === 'grid' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, maxWidth: '100%' }}>
             {/* Top Metrics Row: Total PRs, Approved, Failing Builds */}
-            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Overview</h3>
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('overview')}</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               <div
                 className="rr-stat"
@@ -673,7 +681,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  Total PRs
+                  {t('totalPRs')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--cyan)' }}>
                   {metrics?.total ?? '—'}
@@ -699,7 +707,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  Approved
+                  {t('approved')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>
                   {metrics?.approved ?? '—'}
@@ -725,7 +733,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  Failed
+                  {t('failed')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--red)' }}>
                   {metrics?.failingBuilds ?? '—'}
@@ -734,7 +742,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Reviews Row: No Reviews, 1 Review, 2+ Reviews */}
-            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Review Status</h3>
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('reviewStatus')}</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               <div
                 className="rr-stat"
@@ -756,7 +764,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  No Reviews
+                  {t('noReviews')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--amber)' }}>
                   {metrics?.noReviews ?? '—'}
@@ -782,7 +790,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  1 Review
+                  {t('oneReview')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--cyan)' }}>
                   {metrics?.oneReview ?? '—'}
@@ -808,7 +816,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  2+ Reviews
+                  {t('manyReviews')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>
                   {metrics?.manyReviews ?? '—'}
@@ -817,7 +825,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Last Updated Row: <24hrs, <7 days, >7 days */}
-            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Last Updated</h3>
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('lastUpdated')}</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               <div
                 className="rr-stat"
@@ -839,7 +847,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  &lt; 24 HRS
+                  {t('lt24h')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>
                   {metrics?.lt24h ?? '—'}
@@ -865,7 +873,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  &lt; 7 DAYS
+                  {t('lt7d')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--cyan)' }}>
                   {metrics?.lt7d ?? '—'}
@@ -891,7 +899,7 @@ export default function ReportsPage() {
                     marginBottom: 8,
                   }}
                 >
-                  &gt; 7 DAYS
+                  {t('gt7d')}
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--amber)' }}>
                   {metrics?.gt7d ?? '—'}
@@ -899,7 +907,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Visualisations</h3>
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('visualisations')}</h3>
             {/* Two column layout for charts */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               {/* Open PRs by Person (Horizontal Bar Chart) */}
@@ -913,12 +921,12 @@ export default function ReportsPage() {
                 }}
               >
                 <div className="rr-stat-label" style={{ marginBottom: 14 }}>
-                  Open PRs by Person
+                  {t('openPRsByPerson')}
                 </div>
                 <div style={{ minHeight: 240 }}>
                   {personData.length === 0 ? (
                     <p style={{ textAlign: 'center', padding: '60px', fontSize: 12, color: 'var(--muted-dim)' }}>
-                      No PR authors found
+                      {t('noAuthors')}
                     </p>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -989,7 +997,7 @@ export default function ReportsPage() {
                 }}
               >
                 <div className="rr-stat-label" style={{ marginBottom: 14 }}>
-                  PR by Status
+                  {t('prByStatus')}
                 </div>
                 <div style={{ position: 'relative', height: 200 }}>
                   <canvas ref={chartStatusRef} id="chartStatus" />
@@ -1008,12 +1016,12 @@ export default function ReportsPage() {
               }}
             >
               <div className="rr-stat-label" style={{ marginBottom: 14 }}>
-                PRs by Label
+                {t('prsByLabel')}
               </div>
-              <div style={{ minHeight: 200 }}>
+              <div>
                 {labelsData.length === 0 ? (
-                  <p style={{ textAlign: 'center', padding: '60px', fontSize: 12, color: 'var(--muted-dim)' }}>
-                    No labels found
+                  <p style={{ textAlign: 'center', padding: '40px', fontSize: 12, color: 'var(--muted-dim)' }}>
+                    {t('noLabels')}
                   </p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1026,7 +1034,7 @@ export default function ReportsPage() {
                               fontFamily: "'Space Mono', monospace",
                               fontSize: 11,
                               color: 'var(--muted-dim)',
-                              minWidth: 100,
+                              minWidth: 140,
                               textAlign: 'right',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
@@ -1039,7 +1047,7 @@ export default function ReportsPage() {
                             style={{
                               flex: 1,
                               height: 18,
-                              background: 'rgba(245,158,11,0.2)',
+                              background: 'rgba(34,211,238,0.2)',
                               borderRadius: 3,
                               overflow: 'hidden',
                               position: 'relative',
@@ -1048,7 +1056,7 @@ export default function ReportsPage() {
                             <div
                               style={{
                                 height: '100%',
-                                background: 'var(--amber)',
+                                background: 'var(--cyan)',
                                 width: `${pct}%`,
                                 borderRadius: 3,
                               }}

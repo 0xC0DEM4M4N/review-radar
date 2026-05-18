@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Chart from 'chart.js/auto';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
+import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
 
 const SIZE_COLORS: Record<string, string> = {
   Small: '#22c55e',
@@ -174,11 +177,32 @@ export default function HistoricalDataPage() {
   const [userStats, setUserStats] = useState<[string, UserStats][]>([]);
   const [sizeCategories, setSizeCategories] = useState<Record<string, number>>({ Small: 0, Medium: 0, Large: 0, Enormous: 0 });
   const [sizeDetails, setSizeDetails] = useState<PRSizeDetail[]>([]);
-  const [subtitle, setSubtitle] = useState<string>('Pull request activity over time');
+  const [subtitle, setSubtitle] = useState<string>('');
+
+  const [openedOverTime, setOpenedOverTime] = useState<{ labels: string[]; opened: number[]; closed: number[] }>({ labels: [], opened: [], closed: [] });
+  const [durationBuckets, setDurationBuckets] = useState<{ labels: string[]; values: number[]; avg: number }>({ labels: [], values: [], avg: 0 });
+  const [approvalBuckets, setApprovalBuckets] = useState<{ labels: string[]; values: number[]; avg: number }>({ labels: [], values: [], avg: 0 });
+  const [sizeSpreadFiles, setSizeSpreadFiles] = useState<{ labels: string[]; values: number[]; avg: number }>({ labels: [], values: [], avg: 0 });
+  const [sizeSpreadLines, setSizeSpreadLines] = useState<{ labels: string[]; values: number[]; avg: number }>({ labels: [], values: [], avg: 0 });
+  const [sizeToggle, setSizeToggle] = useState<'files' | 'lines'>('files');
 
   const [noPat, setNoPat] = useState<boolean>(false);
   const [noRepos, setNoRepos] = useState<boolean>(false);
   const [noData, setNoData] = useState<boolean>(false);
+
+  const params = useParams();
+  const locale = (params?.locale as string) || 'en';
+  const t = useTranslations('historical');
+  const tc = useTranslations('common');
+
+  const chartOverTimeRef = useRef<HTMLCanvasElement | null>(null);
+  const chartOverTimeInstance = useRef<any>(null);
+  const chartDurationRef = useRef<HTMLCanvasElement | null>(null);
+  const chartDurationInstance = useRef<any>(null);
+  const chartApprovalRef = useRef<HTMLCanvasElement | null>(null);
+  const chartApprovalInstance = useRef<any>(null);
+  const chartSizeRef = useRef<HTMLCanvasElement | null>(null);
+  const chartSizeInstance = useRef<any>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -186,7 +210,21 @@ export default function HistoricalDataPage() {
     const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
     setDateFrom(formatDate(firstDay));
     setDateTo(formatDate(lastDay));
-  }, []);
+    setSubtitle(t('defaultSubtitle'));
+
+    const savedTheme = localStorage.getItem('reviewradar-theme');
+    const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+    const theme = savedTheme || (prefersLight ? 'light' : 'dark');
+    if (theme === 'light') {
+      Chart.defaults.color = 'rgba(0,0,0,0.5)';
+      Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
+    } else {
+      Chart.defaults.color = 'rgba(255,255,255,0.45)';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+    }
+    Chart.defaults.font.family = "'Space Mono', monospace";
+    Chart.defaults.font.size = 11;
+  }, [t]);
 
   const getStoredPat = useCallback((): string => {
     return localStorage.getItem('github-pat') || '';
@@ -208,6 +246,20 @@ export default function HistoricalDataPage() {
     } catch (e) {
       return [];
     }
+  }, []);
+
+  const destroyCharts = useCallback(() => {
+    [
+      chartOverTimeInstance,
+      chartDurationInstance,
+      chartApprovalInstance,
+      chartSizeInstance,
+    ].forEach((ref) => {
+      if (ref.current) {
+        try { ref.current.destroy(); } catch (e) { /* ignore */ }
+        ref.current = null;
+      }
+    });
   }, []);
 
   const loadHistoricalData = useCallback(async () => {
@@ -244,7 +296,7 @@ export default function HistoricalDataPage() {
     }
 
     try {
-      setStatusMsg(`Fetching PRs from ${repos.length} repo${repos.length !== 1 ? 's' : ''}…`);
+      setStatusMsg(t('fetchingPRs', { count: repos.length }));
       let allPRs: PRData[] = [];
       for (const repo of repos) {
         const repoPRs = await fetchRepoPRsAll(repo, pat);
@@ -252,24 +304,24 @@ export default function HistoricalDataPage() {
       }
 
       if (allPRs.length === 0) {
-        setStatusMsg('No PRs found');
+        setStatusMsg(t('noPRsFound'));
         setLoading(false);
         setNoData(true);
         return;
       }
 
-      setStatusMsg(`Fetching reviews for ${allPRs.length} PRs…`);
+      setStatusMsg(t('fetchingReviews', { count: allPRs.length }));
       const reviewsList = await fetchBatch(allPRs, (pr) => fetchReviews(pr, pat), (done, total) => {
-        setStatusMsg(`Fetched reviews ${done} / ${total}…`);
+        setStatusMsg(t('fetchedReviews', { done, total }));
       });
       const reviewsMap: Record<number, Review[]> = {};
       allPRs.forEach((pr, i) => {
         reviewsMap[pr.id] = reviewsList[i] || [];
       });
 
-      setStatusMsg(`Fetching file sizes for ${allPRs.length} PRs…`);
+      setStatusMsg(t('fetchingFileSizes', { count: allPRs.length }));
       const filesList = await fetchBatch(allPRs, (pr) => fetchPRFiles(pr, pat), (done, total) => {
-        setStatusMsg(`Fetched files ${done} / ${total}…`);
+        setStatusMsg(t('fetchedFiles', { done, total }));
       });
       const filesMap: Record<number, PRFile[]> = {};
       allPRs.forEach((pr, i) => {
@@ -281,12 +333,12 @@ export default function HistoricalDataPage() {
       showData(allPRs, reviewsMap, filesMap, range);
     } catch (e: any) {
       console.error('Load error:', e);
-      setStatusMsg('Error: ' + e.message);
+      setStatusMsg(tc('errorWithMessage', { message: e.message }));
       setIsError(true);
       setLoading(false);
       setNoData(true);
     }
-  }, [allTime, dateFrom, dateTo, getStoredPat, getStoredRepos, getSelectedRepos]);
+  }, [allTime, dateFrom, dateTo, getStoredPat, getStoredRepos, getSelectedRepos, t, tc]);
 
   const showData = useCallback((prs: PRData[], reviewsMap: Record<number, Review[]>, filesMap: Record<number, PRFile[]>, range: { allTime: boolean; start?: Date | null; end?: Date | null }) => {
     setNoData(false);
@@ -305,7 +357,7 @@ export default function HistoricalDataPage() {
       reviews.forEach((r) => {
         if (inRange(r.submitted_at, range)) {
           totalReviews++;
-          const name = r.user?.login || 'unknown';
+          const name = r.user?.login || tc('unknown');
           reviewsByPerson[name] = (reviewsByPerson[name] || 0) + 1;
         }
       });
@@ -318,17 +370,17 @@ export default function HistoricalDataPage() {
 
     const users: Record<string, UserStats> = {};
     opened.forEach((p) => {
-      const name = p.user?.login || 'unknown';
+      const name = p.user?.login || tc('unknown');
       if (!users[name]) users[name] = { opened: 0, closed: 0, merged: 0, reviews: 0 };
       users[name].opened++;
     });
     closed.forEach((p) => {
-      const name = p.user?.login || 'unknown';
+      const name = p.user?.login || tc('unknown');
       if (!users[name]) users[name] = { opened: 0, closed: 0, merged: 0, reviews: 0 };
       users[name].closed++;
     });
     merged.forEach((p) => {
-      const name = p.user?.login || 'unknown';
+      const name = p.user?.login || tc('unknown');
       if (!users[name]) users[name] = { opened: 0, closed: 0, merged: 0, reviews: 0 };
       users[name].merged++;
     });
@@ -360,18 +412,132 @@ export default function HistoricalDataPage() {
 
       sizeCats[category]++;
       prSizeDetails.push({
-        title: pr.title || 'Untitled',
-        author: pr.user?.login || 'unknown',
+        title: pr.title || tc('untitledPR'),
+        author: pr.user?.login || tc('unknown'),
         files: fileCount,
         lines: lineCount,
         category,
-        state: pr.merged ? 'Merged' : pr.state === 'closed' ? 'Closed' : 'Open',
+        state: pr.merged ? tc('stateMerged') : pr.state === 'closed' ? tc('stateClosed') : tc('stateOpen'),
         url: pr.html_url || '#',
       });
     });
 
     setSizeCategories(sizeCats);
     setSizeDetails(prSizeDetails.sort((a, b) => b.lines - a.lines));
+
+    // Chart 1: Opened vs Closed over time
+    const dateOpened: Record<string, number> = {};
+    const dateClosed: Record<string, number> = {};
+    const allDates = new Set<string>();
+    opened.forEach((pr) => {
+      const key = pr.created_at?.split('T')[0] || '';
+      if (key) { dateOpened[key] = (dateOpened[key] || 0) + 1; allDates.add(key); }
+    });
+    closed.forEach((pr) => {
+      const key = pr.closed_at?.split('T')[0] || '';
+      if (key) { dateClosed[key] = (dateClosed[key] || 0) + 1; allDates.add(key); }
+    });
+    let sortedDates = Array.from(allDates).sort();
+    if (sortedDates.length > 1) {
+      const startDate = new Date(sortedDates[0]);
+      const endDate = new Date(sortedDates[sortedDates.length - 1]);
+      const filledDates: string[] = [];
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        filledDates.push(formatDate(d));
+      }
+      sortedDates = filledDates;
+    }
+    setOpenedOverTime({
+      labels: sortedDates,
+      opened: sortedDates.map((d) => dateOpened[d] || 0),
+      closed: sortedDates.map((d) => dateClosed[d] || 0),
+    });
+
+    // Chart 2: PR open duration
+    const durations: number[] = [];
+    prs.forEach((pr) => {
+      if (pr.closed_at && pr.created_at) {
+        const days = (new Date(pr.closed_at).getTime() - new Date(pr.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        if (days >= 0) durations.push(days);
+      }
+    });
+    const durBuckets = [0, 0, 0, 0, 0, 0];
+    durations.forEach((d) => {
+      if (d < 1) durBuckets[0]++;
+      else if (d < 3) durBuckets[1]++;
+      else if (d < 7) durBuckets[2]++;
+      else if (d < 14) durBuckets[3]++;
+      else if (d < 30) durBuckets[4]++;
+      else durBuckets[5]++;
+    });
+    setDurationBuckets({
+      labels: ['<1', '1–3', '3–7', '7–14', '14–30', '30+'],
+      values: durBuckets,
+      avg: durations.length > 0 ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10 : 0,
+    });
+
+    // Chart 3: Time to first approval
+    const approvalTimes: number[] = [];
+    prs.forEach((pr) => {
+      const reviews = reviewsMap[pr.id] || [];
+      const approvals = reviews
+        .filter((r) => r.state === 'APPROVED' && r.submitted_at)
+        .map((r) => new Date(r.submitted_at!).getTime());
+      if (approvals.length > 0 && pr.created_at) {
+        const firstApproval = Math.min(...approvals);
+        const days = (firstApproval - new Date(pr.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        if (days >= 0) approvalTimes.push(days);
+      }
+    });
+    const appBuckets = [0, 0, 0, 0, 0, 0];
+    approvalTimes.forEach((d) => {
+      if (d < 1) appBuckets[0]++;
+      else if (d < 3) appBuckets[1]++;
+      else if (d < 7) appBuckets[2]++;
+      else if (d < 14) appBuckets[3]++;
+      else if (d < 30) appBuckets[4]++;
+      else appBuckets[5]++;
+    });
+    setApprovalBuckets({
+      labels: ['<1', '1–3', '3–7', '7–14', '14–30', '30+'],
+      values: appBuckets,
+      avg: approvalTimes.length > 0 ? Math.round((approvalTimes.reduce((a, b) => a + b, 0) / approvalTimes.length) * 10) / 10 : 0,
+    });
+
+    // Chart 4: PR size spread
+    const fileCounts: number[] = [];
+    const lineCounts: number[] = [];
+    opened.forEach((pr) => {
+      const files = filesMap[pr.id] || [];
+      fileCounts.push(files.length);
+      lineCounts.push(files.reduce((sum, f) => sum + (f.additions || 0) + (f.deletions || 0), 0));
+    });
+    const fileBucks = [0, 0, 0, 0, 0];
+    fileCounts.forEach((c) => {
+      if (c === 1) fileBucks[0]++;
+      else if (c <= 5) fileBucks[1]++;
+      else if (c <= 10) fileBucks[2]++;
+      else if (c <= 20) fileBucks[3]++;
+      else fileBucks[4]++;
+    });
+    const lineBucks = [0, 0, 0, 0, 0];
+    lineCounts.forEach((c) => {
+      if (c <= 50) lineBucks[0]++;
+      else if (c <= 250) lineBucks[1]++;
+      else if (c <= 500) lineBucks[2]++;
+      else if (c <= 1000) lineBucks[3]++;
+      else lineBucks[4]++;
+    });
+    setSizeSpreadFiles({
+      labels: ['1', '2–5', '6–10', '11–20', '20+'],
+      values: fileBucks,
+      avg: fileCounts.length > 0 ? Math.round((fileCounts.reduce((a, b) => a + b, 0) / fileCounts.length) * 10) / 10 : 0,
+    });
+    setSizeSpreadLines({
+      labels: ['≤50', '51–250', '251–500', '501–1000', '1000+'],
+      values: lineBucks,
+      avg: lineCounts.length > 0 ? Math.round((lineCounts.reduce((a, b) => a + b, 0) / lineCounts.length) * 10) / 10 : 0,
+    });
 
     const repoNames = [...new Set(
       prs
@@ -381,14 +547,192 @@ export default function HistoricalDataPage() {
         })
         .filter(Boolean)
     )] as string[];
-    const rangeLabel = range.allTime ? 'all time' : `${formatDate(range.start!)} – ${formatDate(range.end!)}`;
+    const rangeLabel = range.allTime ? t('allTime') : `${formatDate(range.start!)} – ${formatDate(range.end!)}`;
     const repoLabel = repoNames.join(', ');
     setSubtitle(`${opened.length} PRs opened · ${rangeLabel} · ${repoLabel.slice(0, 60)}${repoLabel.length > 60 ? '…' : ''}`);
-  }, []);
+  }, [tc, t]);
 
   const totalSized = useMemo(() => Object.values(sizeCategories).reduce((a, b) => a + b, 0), [sizeCategories]);
   const sizeEntries = useMemo(() => Object.entries(sizeCategories).filter(([, v]) => v > 0), [sizeCategories]);
   const maxSizeCount = useMemo(() => Math.max(...Object.values(sizeCategories)), [sizeCategories]);
+
+  // Chart 1: Opened vs Closed over time
+  useEffect(() => {
+    if (!chartOverTimeRef.current || openedOverTime.labels.length === 0) return;
+    if (chartOverTimeInstance.current) { chartOverTimeInstance.current.destroy(); chartOverTimeInstance.current = null; }
+
+    chartOverTimeInstance.current = new Chart(chartOverTimeRef.current, {
+      type: 'line',
+      data: {
+        labels: openedOverTime.labels,
+        datasets: [
+          {
+            label: t('opened'),
+            data: openedOverTime.opened,
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34,211,238,0.08)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+          },
+          {
+            label: t('closed'),
+            data: openedOverTime.closed,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.08)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            titleFont: { family: "'Space Mono', monospace", size: 11 },
+            bodyFont: { family: "'Space Mono', monospace", size: 11 },
+            padding: 10,
+            cornerRadius: 6,
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0, maxTicksLimit: 12 } },
+          y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.08)' } },
+        },
+      },
+    });
+    return () => { if (chartOverTimeInstance.current) { chartOverTimeInstance.current.destroy(); chartOverTimeInstance.current = null; }};
+  }, [openedOverTime, t]);
+
+  // Chart 2: PR open duration
+  useEffect(() => {
+    if (!chartDurationRef.current || durationBuckets.labels.length === 0) return;
+    if (chartDurationInstance.current) { chartDurationInstance.current.destroy(); chartDurationInstance.current = null; }
+
+    chartDurationInstance.current = new Chart(chartDurationRef.current, {
+      type: 'bar',
+      data: {
+        labels: durationBuckets.labels.map((l) => `${l} ${tc('days')}`),
+        datasets: [{
+          label: t('closed'),
+          data: durationBuckets.values,
+          backgroundColor: '#f59e0b',
+          borderRadius: 4,
+          barPercentage: 0.65,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            titleFont: { family: "'Space Mono', monospace", size: 11 },
+            bodyFont: { family: "'Space Mono', monospace", size: 11 },
+            padding: 10,
+            cornerRadius: 6,
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.08)' } },
+        },
+      },
+    });
+    return () => { if (chartDurationInstance.current) { chartDurationInstance.current.destroy(); chartDurationInstance.current = null; }};
+  }, [durationBuckets, t, tc]);
+
+  // Chart 3: Time to first approval
+  useEffect(() => {
+    if (!chartApprovalRef.current || approvalBuckets.labels.length === 0) return;
+    if (chartApprovalInstance.current) { chartApprovalInstance.current.destroy(); chartApprovalInstance.current = null; }
+
+    chartApprovalInstance.current = new Chart(chartApprovalRef.current, {
+      type: 'bar',
+      data: {
+        labels: approvalBuckets.labels.map((l) => `${l} ${tc('days')}`),
+        datasets: [{
+          label: t('reviews'),
+          data: approvalBuckets.values,
+          backgroundColor: '#8b5cf6',
+          borderRadius: 4,
+          barPercentage: 0.65,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            titleFont: { family: "'Space Mono', monospace", size: 11 },
+            bodyFont: { family: "'Space Mono', monospace", size: 11 },
+            padding: 10,
+            cornerRadius: 6,
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.08)' } },
+        },
+      },
+    });
+    return () => { if (chartApprovalInstance.current) { chartApprovalInstance.current.destroy(); chartApprovalInstance.current = null; }};
+  }, [approvalBuckets, t, tc]);
+
+  // Chart 4: PR size spread
+  useEffect(() => {
+    if (!chartSizeRef.current) return;
+    const data = sizeToggle === 'files' ? sizeSpreadFiles : sizeSpreadLines;
+    if (data.labels.length === 0) return;
+    if (chartSizeInstance.current) { chartSizeInstance.current.destroy(); chartSizeInstance.current = null; }
+
+    chartSizeInstance.current = new Chart(chartSizeRef.current, {
+      type: 'bar',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: sizeToggle === 'files' ? tc('files') : tc('lines'),
+          data: data.values,
+          backgroundColor: '#22c55e',
+          borderRadius: 4,
+          barPercentage: 0.65,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            titleFont: { family: "'Space Mono', monospace", size: 11 },
+            bodyFont: { family: "'Space Mono', monospace", size: 11 },
+            padding: 10,
+            cornerRadius: 6,
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.08)' } },
+        },
+      },
+    });
+    return () => { if (chartSizeInstance.current) { chartSizeInstance.current.destroy(); chartSizeInstance.current = null; }};
+  }, [sizeSpreadFiles, sizeSpreadLines, sizeToggle, tc]);
+
+  useEffect(() => {
+    return () => { destroyCharts(); };
+  }, [destroyCharts]);
 
   return (
     <Layout>
@@ -401,7 +745,7 @@ export default function HistoricalDataPage() {
           </svg>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 className="rr-header-title">Historical Data</h1>
+          <h1 className="rr-header-title">{t('title')}</h1>
           <p className="rr-header-sub">{subtitle}</p>
         </div>
         <div className="rr-header-actions">
@@ -413,7 +757,7 @@ export default function HistoricalDataPage() {
             ) : (
               <span className="loading" />
             )}
-            Load Data
+            {t('loadData')}
           </button>
         </div>
       </div>
@@ -422,7 +766,7 @@ export default function HistoricalDataPage() {
       <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div>
           <label style={{ display: 'block', fontFamily: "'Space Mono',monospace", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', marginBottom: '6px' }}>
-            From
+            {t('from')}
           </label>
           <input
             type="date"
@@ -435,7 +779,7 @@ export default function HistoricalDataPage() {
         </div>
         <div>
           <label style={{ display: 'block', fontFamily: "'Space Mono',monospace", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', marginBottom: '6px' }}>
-            To
+            {t('to')}
           </label>
           <input
             type="date"
@@ -448,7 +792,7 @@ export default function HistoricalDataPage() {
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--muted)', cursor: 'pointer', paddingBottom: '2px' }}>
           <input type="checkbox" checked={allTime} onChange={(e) => setAllTime(e.target.checked)} className="accent-cyan" />
-          All time
+          {t('allTime')}
         </label>
       </div>
 
@@ -480,8 +824,8 @@ export default function HistoricalDataPage() {
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
-          <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>No data found</p>
-          <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Select a date range and click Load Data to fetch historical PR data.</p>
+          <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('noDataTitle')}</p>
+          <p style={{ fontSize: '13px', color: 'var(--muted)' }}>{t('noDataDescription')}</p>
         </div>
       )}
 
@@ -494,10 +838,10 @@ export default function HistoricalDataPage() {
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>No GitHub token configured</p>
-          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>Add your Personal Access Token in Settings to fetch live data.</p>
-          <a href="/settings" className="rr-btn-primary" style={{ textDecoration: 'none' }}>
-            Go to Settings
+          <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('noPatTitle')}</p>
+          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>{t('noPatDescription')}</p>
+          <a href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+            {t('goToSettings')}
           </a>
         </div>
       )}
@@ -509,10 +853,10 @@ export default function HistoricalDataPage() {
               <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
             </svg>
           </div>
-          <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>No repositories selected</p>
-          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>Add repositories in Settings to start tracking pull requests.</p>
-          <a href="/settings" className="rr-btn-primary" style={{ textDecoration: 'none' }}>
-            Add Repositories →
+          <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('noReposTitle')}</p>
+          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>{t('noReposDescription')}</p>
+          <a href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+            {t('addRepos')}
           </a>
         </div>
       )}
@@ -522,9 +866,9 @@ export default function HistoricalDataPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 32px', flexDirection: 'column' }}>
           <LoadingIllustration width={240} height={160} />
           <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--muted)', marginTop: '16px', letterSpacing: '0.05em', textAlign: 'center' }}>
-            Fetching historical data…
+            {t('fetchingHistorical')}
             <br />
-            Please be patient, this could take some time if you have been busy!
+            {t('fetchingHistoricalSub')}
           </p>
         </div>
       )}
@@ -533,44 +877,44 @@ export default function HistoricalDataPage() {
       {showGrid && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', maxWidth: '1200px', margin: '0 auto' }}>
           {/* Overview Metrics */}
-          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Overview</h3>
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('overview')}</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
             <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>Opened</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('opened')}</div>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '28px', fontWeight: 700, color: 'var(--cyan)' }}>{openedCount}</div>
             </div>
             <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>Closed</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('closed')}</div>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '28px', fontWeight: 700, color: 'var(--amber)' }}>{closedCount}</div>
             </div>
             <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>Merged</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('merged')}</div>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '28px', fontWeight: 700, color: 'var(--green)' }}>{mergedCount}</div>
             </div>
             <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>Reviews</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('reviews')}</div>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '28px', fontWeight: 700, color: 'var(--purple)' }}>{reviewsCount}</div>
             </div>
           </div>
 
           {/* User Metrics */}
-          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">Activity by Person</h3>
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('activityByPerson')}</h3>
           <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', overflowX: 'auto' }}>
             <table className="w-full border-collapse text-[13px]">
               <thead className="border-b border-border-faint">
                 <tr>
-                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Person</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Opened</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Closed</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Merged</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Reviews</th>
+                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('person')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('opened')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('closed')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('merged')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('reviews')}</th>
                 </tr>
               </thead>
               <tbody>
                 {userStats.length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted-dim)' }}>
-                      No activity in selected period
+                      {t('noActivity')}
                     </td>
                   </tr>
                 ) : (
@@ -588,12 +932,85 @@ export default function HistoricalDataPage() {
             </table>
           </div>
 
+          {/* Chart: PRs Opened & Closed Over Time */}
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('prsOverTime')}</h3>
+          <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', height: '300px' }}>
+            {openedOverTime.labels.length === 0 ? (
+              <p style={{ textAlign: 'center', padding: '100px 0', fontSize: '12px', color: 'var(--muted-dim)' }}>{t('noPRsInPeriod')}</p>
+            ) : (
+              <canvas ref={chartOverTimeRef} />
+            )}
+          </div>
+
+          {/* Charts: Duration & Approval */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+            <div>
+              <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('openDuration')}</h3>
+              <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', height: '280px' }}>
+                {durationBuckets.labels.length === 0 || durationBuckets.values.every((v) => v === 0) ? (
+                  <p style={{ textAlign: 'center', padding: '90px 0', fontSize: '12px', color: 'var(--muted-dim)' }}>{t('stillOpen')}</p>
+                ) : (
+                  <>
+                    <canvas ref={chartDurationRef} style={{ maxHeight: '220px' }} />
+                    <div style={{ textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted)', marginTop: '8px' }}>
+                      {t('avgOpenDuration', { value: durationBuckets.avg })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div>
+              <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('timeToApproval')}</h3>
+              <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', height: '280px' }}>
+                {approvalBuckets.labels.length === 0 || approvalBuckets.values.every((v) => v === 0) ? (
+                  <p style={{ textAlign: 'center', padding: '90px 0', fontSize: '12px', color: 'var(--muted-dim)' }}>{t('noApproval')}</p>
+                ) : (
+                  <>
+                    <canvas ref={chartApprovalRef} style={{ maxHeight: '220px' }} />
+                    <div style={{ textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted)', marginTop: '8px' }}>
+                      {t('avgApprovalTime', { value: approvalBuckets.avg })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Chart: PR Size Spread */}
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('prSizeSpread')}</h3>
+          <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', height: '300px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setSizeToggle('files')}
+                className={`text-[11px] font-space-mono px-3 py-1 rounded-md border transition-colors ${sizeToggle === 'files' ? 'border-cyan/40 bg-cyan/10 text-cyan' : 'border-border-faint text-muted hover:text-text-primary hover:border-border-subtle'}`}
+              >
+                {t('byFiles')}
+              </button>
+              <button
+                onClick={() => setSizeToggle('lines')}
+                className={`text-[11px] font-space-mono px-3 py-1 rounded-md border transition-colors ${sizeToggle === 'lines' ? 'border-cyan/40 bg-cyan/10 text-cyan' : 'border-border-faint text-muted hover:text-text-primary hover:border-border-subtle'}`}
+              >
+                {t('byLines')}
+              </button>
+            </div>
+            {(sizeToggle === 'files' ? sizeSpreadFiles : sizeSpreadLines).labels.length === 0 ? (
+              <p style={{ textAlign: 'center', padding: '80px 0', fontSize: '12px', color: 'var(--muted-dim)' }}>{t('noPRsInPeriod')}</p>
+            ) : (
+              <>
+                <canvas ref={chartSizeRef} style={{ maxHeight: '200px' }} />
+                <div style={{ textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted)', marginTop: '8px' }}>
+                  {t('avgSize', { value: sizeToggle === 'files' ? sizeSpreadFiles.avg : sizeSpreadLines.avg, unit: sizeToggle === 'files' ? tc('files') : tc('lines') })}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* PR Size Distribution */}
-          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">PR Size Distribution</h3>
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('prSizeDistribution')}</h3>
           <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {sizeEntries.length === 0 ? (
-                <p style={{ textAlign: 'center', padding: '40px', fontSize: '12px', color: 'var(--muted-dim)' }}>No PRs opened in selected period</p>
+                <p style={{ textAlign: 'center', padding: '40px', fontSize: '12px', color: 'var(--muted-dim)' }}>{t('noPRsInPeriod')}</p>
               ) : (
                 sizeEntries.map(([cat, count]) => {
                   const pct = totalSized > 0 ? Math.round((count / totalSized) * 100) : 0;
@@ -601,7 +1018,7 @@ export default function HistoricalDataPage() {
                   const color = SIZE_COLORS[cat];
                   return (
                     <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted-dim)', minWidth: '80px', textAlign: 'right' }}>{cat}</div>
+                      <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted-dim)', minWidth: '80px', textAlign: 'right' }}>{tc(`size${cat}`)}</div>
                       <div style={{ flex: 1, height: '18px', background: `${color}33`, borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
                         <div style={{ height: '100%', background: color, width: `${barWidth}%`, borderRadius: '3px' }} />
                       </div>
@@ -615,24 +1032,24 @@ export default function HistoricalDataPage() {
           </div>
 
           {/* PR Size Details */}
-          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">PR Size Details</h3>
+          <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('prSizeDetails')}</h3>
           <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '20px', overflowX: 'auto' }}>
             <table className="w-full border-collapse text-[13px]">
               <thead className="border-b border-border-faint">
                 <tr>
-                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Pull Request</th>
-                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Author</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Files</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Lines</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Size</th>
-                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">Status</th>
+                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colPullRequest')}</th>
+                  <th className="px-3 py-2 text-left font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colAuthor')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colFiles')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colLines')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colSize')}</th>
+                  <th className="px-3 py-2 text-center font-space-mono text-[10px] font-semibold uppercase tracking-wider text-white/35">{t('colStatus')}</th>
                 </tr>
               </thead>
               <tbody>
                 {sizeDetails.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--muted-dim)' }}>
-                      No PRs opened in selected period
+                      {t('noPRsInPeriod')}
                     </td>
                   </tr>
                 ) : (
@@ -650,7 +1067,7 @@ export default function HistoricalDataPage() {
                         <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--text-primary)' }}>{pr.lines}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                           <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, color, background: `${color}22` }}>
-                            {pr.category}
+                            {tc(`size${pr.category}`)}
                           </span>
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: "'Space Mono',monospace", fontSize: '11px', color: 'var(--muted)' }}>{pr.state}</td>

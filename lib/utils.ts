@@ -12,7 +12,7 @@ export function getContrastColor(hexColor: string) {
   return luminance > 0.5 ? '#000000' : '#ffffff';
 }
 
-export function formatDateSplit(isoDateString: string) {
+export function formatDateSplit(isoDateString: string, todayLabel = 'Today') {
   const date = new Date(isoDateString);
   const today = new Date();
 
@@ -21,7 +21,7 @@ export function formatDateSplit(isoDateString: string) {
 
   let dateStr;
   if (dateOnly.getTime() === todayOnly.getTime()) {
-    dateStr = 'Today';
+    dateStr = todayLabel;
   } else {
     const includeYear = dateOnly.getFullYear() === todayOnly.getFullYear();
     dateStr = date.toLocaleDateString('en-US', {

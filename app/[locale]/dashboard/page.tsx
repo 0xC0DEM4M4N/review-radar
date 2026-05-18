@@ -9,6 +9,7 @@ import PRDrawer from '@/components/PRDrawer';
 import StatsBar from '@/components/StatsBar';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
+import { useTranslations } from 'next-intl';
 
 export default function DashboardPage() {
   const store = useAppStore();
@@ -24,6 +25,10 @@ export default function DashboardPage() {
     setLastLoadedRepos,
     setActiveFilter,
   } = store;
+
+  const t = useTranslations('dashboard');
+  const tc = useTranslations('common');
+  const tStatus = useTranslations('components.prtable.status');
 
   const [loading, setLoading] = useState(false);
   const [drawerPR, setDrawerPR] = useState<PR | null>(null);
@@ -64,7 +69,7 @@ export default function DashboardPage() {
   const loadPRs = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     const token = pat || localStorage.getItem('github-pat');
     if (!token) {
-      showMsg('Please enter a GitHub PAT in settings', 'error');
+      showMsg(t('pleaseEnterPat'), 'error');
       return;
     }
 
@@ -129,16 +134,16 @@ export default function DashboardPage() {
 
       setLastLoadedRepos(new Set(Array.from(discoveredRepos)));
       if (silent) {
-        showMsg('Refreshed ${prsWithReviews.length} from ${discoveredRepos.size} repos - Complete', 'success');
+        showMsg(t('refreshedMessage', { count: prsWithReviews.length, repoCount: discoveredRepos.size }), 'success');
       } else {
-        showMsg(`Loaded ${prsWithReviews.length} pull requests from ${discoveredRepos.size} repos`, 'success');
+        showMsg(t('loadedMessage', { count: prsWithReviews.length, repoCount: discoveredRepos.size }), 'success');
       }
     } catch (error: any) {
-      showMsg('Error: ' + error.message, 'error');
+      showMsg(tc('errorWithMessage', { message: error.message }), 'error');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [pat, selectedRepos, setAllPRs, setCurrentUser, setLastLoadedRepos, showMsg]);
+  }, [pat, selectedRepos, setAllPRs, setCurrentUser, setLastLoadedRepos, showMsg, t, tc]);
 
   // Auto-load PRs when repos are already selected and PAT is available
   useEffect(() => {
@@ -175,11 +180,11 @@ export default function DashboardPage() {
   );
 
   const activeFilterPill = activeFilters.label
-    ? `Label: ${activeFilters.label}`
+    ? t('filterPillLabel', { label: activeFilters.label })
     : activeFilters.status
-    ? `Status: ${activeFilters.status}`
+    ? t('filterPillStatus', { status: tStatus(activeFilters.status as any) })
     : activeFilters.author
-    ? `Author: ${activeFilters.author}`
+    ? t('filterPillAuthor', { author: activeFilters.author })
     : null;
 
   return (
@@ -201,8 +206,8 @@ export default function DashboardPage() {
             </svg>
           </div>
           <div>
-            <h1 className="rr-header-title">ReviewRadar</h1>
-            <div className="rr-header-sub">Live PR Dashboard</div>
+            <h1 className="rr-header-title">{t('title')}</h1>
+            <div className="rr-header-sub">{t('subtitle')}</div>
           </div>
           <div className="rr-header-actions">
             <div style={{ position: 'relative' }} ref={dropdownRef}>
@@ -210,22 +215,22 @@ export default function DashboardPage() {
                 onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
                 className="rr-btn-ghost"
               >
-                <span>📁</span>
-                <span>{selectedRepos.size === 0 ? 'Select repos' : `${selectedRepos.size} selected`}</span>
-                <span>▼</span>
+                <span>{t('selectReposIcon')}</span>
+                <span>{selectedRepos.size === 0 ? t('selectRepos') : t('selectedCount', { count: selectedRepos.size })}</span>
+                <span>{t('dropdownArrow')}</span>
               </button>
               {repoDropdownOpen && (
                 <div className="absolute top-full left-0 mt-1 w-64 bg-ink-light border border-border-faint rounded-lg shadow-xl z-50 p-2">
                   <input
                     type="text"
-                    placeholder="Search repos..."
+                    placeholder={t('searchReposPlaceholder')}
                     value={repoSearch}
                     onChange={(e) => setRepoSearch(e.target.value)}
                     className="w-full px-3 py-2 mb-2 rounded-md bg-surface border border-border-faint text-sm text-text-primary placeholder-muted focus:outline-none focus:border-cyan"
                   />
                   <div className="flex gap-2 mb-2">
-                    <button onClick={selectAll} className="text-xs text-cyan hover:underline">Select all</button>
-                    <button onClick={clearSelection} className="text-xs text-cyan hover:underline">Clear</button>
+                    <button onClick={selectAll} className="text-xs text-cyan hover:underline">{t('selectAll')}</button>
+                    <button onClick={clearSelection} className="text-xs text-cyan hover:underline">{t('clear')}</button>
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-1">
                     {filteredRepos.map((repo: string) => (
@@ -249,7 +254,7 @@ export default function DashboardPage() {
               disabled={loading}
               className="rr-btn-primary"
             >
-              {loading ? '⟳' : '↻'} Load PRs
+              {loading ? t('loadIconLoading') : t('loadIconIdle')} {t('loadPRs')}
             </button>
 
             {activeFilterPill && (
@@ -263,7 +268,7 @@ export default function DashboardPage() {
                   }}
                   className="rr-filter-pill-close"
                 >
-                  &times;
+                  {t('filterPillClose')}
                 </button>
               </span>
             )}
@@ -278,7 +283,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 32px', flexDirection: 'column' }}>
             <LoadingIllustration width={240} height={160} />
             <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '12px', color: 'var(--muted)', marginTop: '16px', letterSpacing: '0.05em', textAlign: 'center' }}>
-              Fetching pull requests…
+              {t('fetchingPRs')}
             </p>
           </div>
         )}

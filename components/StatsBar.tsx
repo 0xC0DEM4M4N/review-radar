@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
 import { getRepoFullNameFromUrl } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 
 function getConsolidatedApprovalCount(pr: any) {
   const reviews = pr.reviews || [];
@@ -22,6 +23,7 @@ function getConsolidatedApprovalCount(pr: any) {
 
 export default function StatsBar() {
   const { allPRs, currentUser, selectedRepos, setFilter, currentFilter } = useAppStore();
+  const t = useTranslations('components.statsbar');
 
   const visiblePRs = useMemo(() => {
     return allPRs.filter((pr) => {
@@ -51,11 +53,11 @@ export default function StatsBar() {
   }, [visiblePRs, currentUser]);
 
   const cards = [
-    { label: 'Total PRs', value: stats.total, color: 'var(--cyan)', filter: 'all' },
-    { label: 'Mine', value: stats.mine, color: 'var(--cyan)', filter: 'owned' },
-    { label: 'Needs Attention', value: stats.needsAttention, color: 'var(--amber)', filter: 'needs-attention' },
-    { label: 'Approved', value: stats.approved, color: 'var(--green)', filter: 'approved' },
-    { label: 'Blocked', value: stats.blocked, color: 'var(--red)', filter: 'blocked' },
+    { label: t('totalPRs'), value: stats.total, color: 'var(--cyan)', filter: 'all' },
+    { label: t('mine'), value: stats.mine, color: 'var(--cyan)', filter: 'owned' },
+    { label: t('needsAttention'), value: stats.needsAttention, color: 'var(--amber)', filter: 'needs-attention' },
+    { label: t('approved'), value: stats.approved, color: 'var(--green)', filter: 'approved' },
+    { label: t('blocked'), value: stats.blocked, color: 'var(--red)', filter: 'blocked' },
   ];
 
   return (
