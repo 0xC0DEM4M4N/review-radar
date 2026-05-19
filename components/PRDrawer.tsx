@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PR } from '@/lib/store';
+import { computeComplexityBreakdown } from '@/lib/complexity';
 import { marked } from 'marked';
 import { useTranslations } from 'next-intl';
 
@@ -80,6 +81,8 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
     setCommentsHtml(html || `<p style="color:var(--muted-dim);font-style:italic;">${tc('noCommentsYet')}</p>`);
   }, [pr, t, tc]);
 
+  const breakdown = pr?.files ? computeComplexityBreakdown(pr.files) : null;
+
   if (!pr) return null;
 
   return (
@@ -95,6 +98,71 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
           <h2 className="text-lg font-semibold text-text-primary pr-4">{pr.title || t('untitledPR')}</h2>
           <button onClick={onClose} className="text-muted hover:text-text-primary text-xl">{t('close')}</button>
         </div>
+
+        {/* Complexity breakdown */}
+        {breakdown && breakdown.score > 0 && (
+          <div className="mb-6 rounded-lg border border-border-faint bg-surface p-4">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
+              {tc('complexityTitle')}
+            </h3>
+            <div className="mb-3 flex items-baseline gap-2">
+              <span
+                className="text-2xl font-bold"
+                style={{
+                  color:
+                    breakdown.score >= 70
+                      ? 'var(--red)'
+                      : breakdown.score >= 50
+                        ? 'var(--amber)'
+                        : breakdown.score >= 30
+                          ? 'var(--cyan)'
+                          : breakdown.score >= 15
+                            ? 'var(--green)'
+                            : 'var(--muted-dim)',
+                }}
+              >
+                {breakdown.score}
+              </span>
+              <span className="text-sm text-muted">— {breakdown.label}</span>
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-muted">
+              <div>
+                <span className="block text-[10px] uppercase tracking-wide text-muted-dim">{tc('complexityFilesLabel')}</span>
+                {breakdown.relevantFiles} relevant{breakdown.ignoredFiles > 0 ? `, ${breakdown.ignoredFiles} ignored` : ''}
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase tracking-wide text-muted-dim">{tc('complexityChurnLabel')}</span>
+                +{breakdown.totalAdditions} / −{breakdown.totalDeletions}
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase tracking-wide text-muted-dim">{tc('complexitySpreadLabel')}</span>
+                {breakdown.fileSpread}
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase tracking-wide text-muted-dim">{tc('complexityIntensityLabel')}</span>
+                {breakdown.intensity}
+              </div>
+            </div>
+            {breakdown.topFiles.length > 0 && (
+              <div>
+                <span className="mb-1 block text-[10px] uppercase tracking-wide text-muted-dim">{tc('complexityTopFilesLabel')}</span>
+                <div className="space-y-1">
+                  {breakdown.topFiles.map((f) => (
+                    <div key={f.filename} className="flex items-center justify-between text-xs">
+                      <span className="truncate text-text-primary" style={{ maxWidth: '70%' }} title={f.filename}>
+                        {f.filename}
+                      </span>
+                      <span className="text-muted" style={{ fontFamily: "'Space Mono', monospace" }}>
+                        +{f.churn} × {f.weight}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mb-6 text-sm text-muted leading-relaxed pr-drawer-desc prose" dangerouslySetInnerHTML={{ __html: description }} />
         <div className="pr-drawer-comments" dangerouslySetInnerHTML={{ __html: commentsHtml }} />
       </div>

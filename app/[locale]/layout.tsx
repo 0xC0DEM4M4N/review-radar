@@ -41,6 +41,11 @@ export default async function LocaleLayout({
             `,
           }}
         />
+        <script
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "19d95e6c5228467a98f77f4972de1789"}'
+        />
       </head>
       <body className="min-h-screen">
         <NextIntlClientProvider messages={messages} locale={locale}>

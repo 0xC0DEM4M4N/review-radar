@@ -9,6 +9,7 @@ import {
   getRepoNameFromUrl,
   getRepoColorIndex,
 } from '@/lib/utils';
+import { computeComplexity, formatSize, computeComplexityBreakdown } from '@/lib/complexity';
 import { useTranslations } from 'next-intl';
 
 function getReviewSummary(pr: PR) {
@@ -77,11 +78,21 @@ function getBuildKey(pr: PR): BuildKey {
   return 'na';
 }
 
-function getUserAction(pr: PR, currentUser: string | null) {
-  const review = pr.reviews?.find((r) => r.user?.login === currentUser);
-  if (!review) return '';
-  if (review.state === 'APPROVED') return 'approved';
-  if (review.state === 'COMMENTED') return 'commented';
+function getUserAction(pr: PR, currentUser: string | null): '' | 'approved' | 'changesRequested' | 'commented' {
+  if (!currentUser) return '';
+  if (pr.user?.login === currentUser) return '';
+  const myReviews = (pr.reviews || []).filter((r) => r.user?.login === currentUser);
+  if (myReviews.length === 0) return '';
+  // Sort by most recent review first
+  const sorted = myReviews.sort((a, b) => {
+    const aDate = new Date(a.submitted_at || a.created_at || 0).getTime();
+    const bDate = new Date(b.submitted_at || b.created_at || 0).getTime();
+    return bDate - aDate;
+  });
+  const latest = sorted[0];
+  if (latest.state === 'APPROVED') return 'approved';
+  if (latest.state === 'CHANGES_REQUESTED') return 'changesRequested';
+  if (latest.state === 'COMMENTED') return 'commented';
   return '';
 }
 
@@ -121,6 +132,9 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     comments: t('columns.comments'),
     labels: t('columns.labels'),
     build: t('columns.build'),
+    files: t('columns.files'),
+    size: t('columns.size'),
+    complexity: t('columns.complexity'),
     created: t('columns.created'),
     updated: t('columns.updated'),
     details: t('columns.details'),
@@ -212,6 +226,23 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               aVal = a.buildStatus?.state || 'unknown';
               bVal = b.buildStatus?.state || 'unknown';
               break;
+            case 'files': {
+              aVal = a.changed_files || (a.files?.length ?? 0);
+              bVal = b.changed_files || (b.files?.length ?? 0);
+              break;
+            }
+            case 'size': {
+              const aTotal = (a.additions || 0) + (a.deletions || 0);
+              const bTotal = (b.additions || 0) + (b.deletions || 0);
+              aVal = aTotal;
+              bVal = bTotal;
+              break;
+            }
+            case 'complexity': {
+              aVal = computeComplexity(a.files || []);
+              bVal = computeComplexity(b.files || []);
+              break;
+            }
             case 'created':
               aVal = new Date(a.created_at || 0).getTime();
               bVal = new Date(b.created_at || 0).getTime();
@@ -221,10 +252,11 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               bVal = new Date(b.updated_at || 0).getTime();
               break;
             case 'myaction': {
-              const aR = a.reviews?.find((r) => r.user?.login === currentUser);
-              const bR = b.reviews?.find((r) => r.user?.login === currentUser);
-              aVal = aR ? (aR.state === 'APPROVED' ? 2 : 1) : 0;
-              bVal = bR ? (bR.state === 'APPROVED' ? 2 : 1) : 0;
+              aVal = getUserAction(a, currentUser);
+              bVal = getUserAction(b, currentUser);
+              const order: Record<string, number> = { 'approved': 3, 'changesRequested': 2, 'commented': 1, '': 0 };
+              aVal = order[aVal as string] ?? 0;
+              bVal = order[bVal as string] ?? 0;
               break;
             }
             default:
@@ -262,7 +294,26 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     const approvalsDisplay = approvalCount > 0 ? <span>{approvalCount}</span> : <span className="rr-build-na">{t('build.na')}</span>;
     const commentsDisplay = commentCount > 0 ? <span>{commentCount}</span> : <span className="rr-build-na">{t('build.na')}</span>;
     const userActionKey = getUserAction(pr, currentUser);
-    const userAction = userActionKey === 'approved' ? <span title={t('userActionApproved')}>✓</span> : userActionKey === 'commented' ? <span title={t('userActionCommented')}>💬</span> : '';
+    const userAction =
+      userActionKey === 'approved' ? (
+        <span title={t('userActionApproved')}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 8L6.5 11.5L13 4.5" />
+          </svg>
+        </span>
+      ) : userActionKey === 'changesRequested' ? (
+        <span title={t('userActionChangesRequested')}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--amber)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 8H3M3 8L7 4M3 8L7 12" />
+          </svg>
+        </span>
+      ) : userActionKey === 'commented' ? (
+        <span title={t('userActionCommented')}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--cyan)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 7.5C14 10.5376 11.5376 13 8.5 13H8L3.5 15V13H3C2.17157 13 1.5 12.3284 1.5 11.5V4.5C1.5 3.67157 2.17157 3 3 3H13C13.8284 3 14.5 3.67157 14.5 4.5V7.5Z" />
+          </svg>
+        </span>
+      ) : '';
     const todayLabel = tc('today');
     const { dateStr: createdDate, timeStr: createdTime } = formatDateSplit(pr.created_at, todayLabel);
     const { dateStr: updatedDate, timeStr: updatedTime } = formatDateSplit(pr.updated_at, todayLabel);
@@ -299,7 +350,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               onClick={(e) => { e.stopPropagation(); setActiveFilter('status', statusKey); }}
               title={tc('filterByStatus')}
             >
-              <span className={`rr-badge ${STATUS_BADGE_MAP[statusKey] || 'rr-badge-open'}`}><span className="rr-badge-dot" />{t(`status.${statusKey}`)}</span>
+              <span className={`rr-badge ${STATUS_BADGE_MAP[statusKey] || 'rr-badge-open'}`}>{t(`status.${statusKey}`)}</span>
             </span>
           </td>
         );
@@ -333,6 +384,64 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
             </span>
           </td>
         );
+      case 'files': {
+        const fileCount = pr.changed_files ?? pr.files?.length ?? 0;
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center', fontSize: 12, fontFamily: "'Space Mono', monospace" }}>
+            <span title={`${fileCount} files changed`}>{fileCount}</span>
+          </td>
+        );
+      }
+      case 'size': {
+        const sizeText = pr.additions !== undefined && pr.deletions !== undefined
+          ? formatSize(pr.additions, pr.deletions)
+          : '—';
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center', fontSize: 11, fontFamily: "'Space Mono', monospace", whiteSpace: 'nowrap' }}>
+            <span title={`${pr.changed_files || 0} files changed`}>{sizeText}</span>
+          </td>
+        );
+      }
+      case 'complexity': {
+        const breakdown = computeComplexityBreakdown(pr.files || []);
+        const score = breakdown.score;
+        let complexityColor = 'var(--muted-dim)';
+        if (score >= 70) complexityColor = 'var(--red)';
+        else if (score >= 50) complexityColor = 'var(--amber)';
+        else if (score >= 30) complexityColor = 'var(--cyan)';
+        else if (score >= 15) complexityColor = 'var(--green)';
+
+        const tooltipLines = [
+          `${breakdown.label} (${score})`,
+          ``,
+          `${t('complexityFiles', { relevant: breakdown.relevantFiles, ignored: breakdown.ignoredFiles })}`,
+          `${t('complexityChurn', { weighted: breakdown.weightedChurn, additions: breakdown.totalAdditions, deletions: breakdown.totalDeletions })}`,
+          `${t('complexitySpread', { spread: breakdown.fileSpread })}`,
+          `${t('complexityIntensity', { intensity: breakdown.intensity })}`,
+        ];
+        if (breakdown.topFiles.length > 0) {
+          tooltipLines.push('', t('complexityTopFiles'));
+          breakdown.topFiles.slice(0, 3).forEach((f) => {
+            tooltipLines.push(`  • ${f.filename.split('/').pop()} (+${f.churn} × ${f.weight})`);
+          });
+        }
+
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center' }}>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: complexityColor,
+                fontFamily: "'Space Mono', monospace",
+              }}
+              title={tooltipLines.join('\n')}
+            >
+              {score}
+            </span>
+          </td>
+        );
+      }
       case 'created':
         return (
           <td key={key} className="rr-age" style={{ verticalAlign: 'middle' }}>

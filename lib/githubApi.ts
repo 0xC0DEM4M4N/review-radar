@@ -31,6 +31,47 @@ export async function fetchUserPRs(username: string, pat: string): Promise<PR[]>
   return data.items || [];
 }
 
+export async function fetchPRFiles(prUrl: string, pat: string): Promise<{ files: any[]; additions: number; deletions: number; changed_files: number }> {
+  const allFiles: any[] = [];
+  let page = 1;
+  try {
+    while (page <= 5) {
+      const res = await fetch(`${prUrl}/files?per_page=100&page=${page}`, {
+        headers: {
+          Authorization: `token ${pat}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+      if (!res.ok) {
+        break;
+      }
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        break;
+      }
+      allFiles.push(...data);
+      if (data.length < 100) break;
+      page++;
+    }
+  } catch (e) {
+    console.warn('Error fetching PR files:', e);
+  }
+
+  let additions = 0;
+  let deletions = 0;
+  for (const f of allFiles) {
+    additions += f.additions || 0;
+    deletions += f.deletions || 0;
+  }
+
+  return {
+    files: allFiles,
+    additions,
+    deletions,
+    changed_files: allFiles.length,
+  };
+}
+
 export async function fetchPRReviews(pr: PR, pat: string): Promise<PR> {
   // Resolve the correct PR URL
   let prUrl = pr.url || pr.html_url || '';
@@ -133,7 +174,10 @@ export async function fetchPRReviews(pr: PR, pat: string): Promise<PR> {
     console.error('Error fetching build status:', error);
   }
 
-  return { ...pr, mergeable_state, reviews, comments, buildStatus };
+  // Fetch files
+  const { files, additions, deletions, changed_files } = await fetchPRFiles(prUrl, pat);
+
+  return { ...pr, mergeable_state, reviews, comments, buildStatus, files, additions, deletions, changed_files };
 }
 
 export async function fetchCurrentUser(pat: string): Promise<string> {

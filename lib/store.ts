@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type PRFile = {
+  filename: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  status: string;
+  patch?: string;
+};
+
 export type PR = {
   id: number;
   title: string;
@@ -20,6 +29,10 @@ export type PR = {
   buildStatus?: { state: string; conclusion?: string; checkRuns?: any[] };
   mergeable_state?: string;
   body?: string;
+  files?: PRFile[];
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
 };
 
 export type SortState = { column: string; direction: 'asc' | 'desc' }[];
@@ -33,6 +46,9 @@ export type ColumnKey =
   | 'comments'
   | 'labels'
   | 'build'
+  | 'files'
+  | 'size'
+  | 'complexity'
   | 'created'
   | 'updated'
   | 'details';
@@ -46,6 +62,9 @@ export const DEFAULT_COLUMNS: ColumnKey[] = [
   'comments',
   'labels',
   'build',
+  'files',
+  'size',
+  'complexity',
   'created',
   'updated',
   'details',
@@ -60,6 +79,9 @@ export const COLUMN_META: Record<ColumnKey, { sortKey: string | null; width: str
   comments: { sortKey: 'comments', width: '75px', narrow: true },
   labels: { sortKey: 'labels', width: '130px', narrow: true },
   build: { sortKey: 'buildStatus', width: '70px', narrow: false },
+  files: { sortKey: 'files', width: '55px', narrow: true },
+  size: { sortKey: 'size', width: '90px', narrow: true },
+  complexity: { sortKey: 'complexity', width: '80px', narrow: true },
   created: { sortKey: 'created', width: '60px', narrow: true },
   updated: { sortKey: 'updated', width: '60px', narrow: true },
   details: { sortKey: null, width: '45px', narrow: true },

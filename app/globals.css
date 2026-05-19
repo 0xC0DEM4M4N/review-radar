@@ -490,13 +490,13 @@
   .repo-bg-7 { background: rgba(20, 184, 166, 0.04) !important; }
 
   .repo-bg-0:hover { background: rgba(34, 211, 238, 0.07) !important; }
-  .repo-bg-1:hover { background: rgba(34, 197, 94, 0.07) !important; }
-  .repo-bg-2:hover { background: rgba(245, 158, 11, 0.07) !important; }
-  .repo-bg-3:hover { background: rgba(239, 68, 68, 0.07) !important; }
-  .repo-bg-4:hover { background: rgba(168, 85, 247, 0.07) !important; }
-  .repo-bg-5:hover { background: rgba(236, 72, 153, 0.07) !important; }
-  .repo-bg-6:hover { background: rgba(99, 102, 241, 0.07) !important; }
-  .repo-bg-7:hover { background: rgba(20, 184, 166, 0.07) !important; }
+  .repo-bg-1:hover { background: rgba(34, 211, 238, 0.07) !important; }
+  .repo-bg-2:hover { background: rgba(34, 211, 238, 0.07) !important; }
+  .repo-bg-3:hover { background: rgba(34, 211, 238, 0.07) !important; }
+  .repo-bg-4:hover { background: rgba(34, 211, 238, 0.07) !important; }
+  .repo-bg-5:hover { background: rgba(34, 211, 238, 0.07) !important; }
+  .repo-bg-6:hover { background: rgba(34, 211, 238, 0.07) !important; }
+  .repo-bg-7:hover { background: rgba(34, 211, 238, 0.07) !important; }
 
   html.light-mode .repo-bg-0 { background: rgba(8, 145, 178, 0.04) !important; }
   html.light-mode .repo-bg-1 { background: rgba(22, 163, 74, 0.04) !important; }
@@ -508,13 +508,13 @@
   html.light-mode .repo-bg-7 { background: rgba(20, 184, 166, 0.04) !important; }
 
   html.light-mode .repo-bg-0:hover { background: rgba(8, 145, 178, 0.07) !important; }
-  html.light-mode .repo-bg-1:hover { background: rgba(22, 163, 74, 0.07) !important; }
-  html.light-mode .repo-bg-2:hover { background: rgba(217, 119, 6, 0.07) !important; }
-  html.light-mode .repo-bg-3:hover { background: rgba(220, 38, 38, 0.07) !important; }
-  html.light-mode .repo-bg-4:hover { background: rgba(168, 85, 247, 0.07) !important; }
-  html.light-mode .repo-bg-5:hover { background: rgba(236, 72, 153, 0.07) !important; }
-  html.light-mode .repo-bg-6:hover { background: rgba(99, 102, 241, 0.07) !important; }
-  html.light-mode .repo-bg-7:hover { background: rgba(20, 184, 166, 0.07) !important; }
+  html.light-mode .repo-bg-1:hover { background: rgba(8, 145, 178, 0.07) !important; }
+  html.light-mode .repo-bg-2:hover { background: rgba(8, 145, 178, 0.07) !important; }
+  html.light-mode .repo-bg-3:hover { background: rgba(8, 145, 178, 0.07) !important; }
+  html.light-mode .repo-bg-4:hover { background: rgba(8, 145, 178, 0.07) !important; }
+  html.light-mode .repo-bg-5:hover { background: rgba(8, 145, 178, 0.07) !important; }
+  html.light-mode .repo-bg-6:hover { background: rgba(8, 145, 178, 0.07) !important; }
+  html.light-mode .repo-bg-7:hover { background: rgba(8, 145, 178, 0.07) !important; }
 
   /* Repo color indicators */
   .repo-color-0 { background: var(--cyan); }
@@ -645,7 +645,9 @@
     font-size: 11px;
     font-weight: 500;
     border: 0.5px solid;
-    white-space: nowrap;
+    white-space: normal;
+    flex-wrap: wrap;
+    line-height: 1.3;
     font-family: 'Space Mono', monospace;
   }
 

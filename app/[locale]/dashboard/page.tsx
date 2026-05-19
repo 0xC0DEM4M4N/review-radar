@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAppStore, PR } from '@/lib/store';
+import { useAppStore, PR, DEFAULT_COLUMNS, ColumnKey } from '@/lib/store';
 import { fetchReposPRs, fetchPRReviews, fetchCurrentUser } from '@/lib/githubApi';
 import { getRepoFullNameFromUrl } from '@/lib/utils';
 import PRTable from '@/components/PRTable';
@@ -39,6 +39,36 @@ export default function DashboardPage() {
 
   const [savedRepos, setSavedRepos] = useState<string[]>([]);
   const hasAutoLoaded = useRef(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
+  const [timeAgo, setTimeAgo] = useState('');
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+
+  // Migrate column order to include any new default columns
+  useEffect(() => {
+    const state = useAppStore.getState();
+    const currentOrder = state.columnOrder;
+    const missing = DEFAULT_COLUMNS.filter((k: ColumnKey) => !currentOrder.includes(k));
+    if (missing.length > 0) {
+      // Insert missing columns in their default positions
+      const newOrder = [...currentOrder];
+      for (const key of missing) {
+        const defaultIndex = DEFAULT_COLUMNS.indexOf(key);
+        // Find insertion point: after the nearest preceding column that exists
+        let insertIndex = newOrder.length;
+        for (let i = defaultIndex - 1; i >= 0; i--) {
+          const idx = newOrder.indexOf(DEFAULT_COLUMNS[i]);
+          if (idx !== -1) {
+            insertIndex = idx + 1;
+            break;
+          }
+        }
+        newOrder.splice(insertIndex, 0, key);
+      }
+      state.setColumnOrder(newOrder);
+    }
+  }, []);
 
   useEffect(() => {
     setSavedRepos(JSON.parse(localStorage.getItem('github-repos') || '[]'));
@@ -101,7 +131,7 @@ export default function DashboardPage() {
       setAllPRs(prsWithReviews);
       // Strip large fields before caching to avoid localStorage quota errors
       const stripped = prsWithReviews.map((pr) => {
-        const { body, comments, reviews, buildStatus, ...rest } = pr as any;
+        const { body, comments, reviews, buildStatus, files, ...rest } = pr as any;
         return {
           ...rest,
           body: body ? body.substring(0, 200) : undefined,
@@ -115,6 +145,17 @@ export default function DashboardPage() {
           buildStatus: buildStatus
             ? { state: buildStatus.state, conclusion: buildStatus.conclusion }
             : undefined,
+          // Keep file metadata but strip patches to save space
+          files: (files || []).map((f: any) => ({
+            filename: f.filename,
+            additions: f.additions,
+            deletions: f.deletions,
+            changes: f.changes,
+            status: f.status,
+          })),
+          additions: pr.additions,
+          deletions: pr.deletions,
+          changed_files: pr.changed_files,
         };
       });
       try {
@@ -133,6 +174,8 @@ export default function DashboardPage() {
       });
 
       setLastLoadedRepos(new Set(Array.from(discoveredRepos)));
+      setLastRefreshAt(Date.now());
+
       if (silent) {
         showMsg(t('refreshedMessage', { count: prsWithReviews.length, repoCount: discoveredRepos.size }), 'success');
       } else {
@@ -145,6 +188,26 @@ export default function DashboardPage() {
     }
   }, [pat, selectedRepos, setAllPRs, setCurrentUser, setLastLoadedRepos, showMsg, t, tc]);
 
+  const setupAutoRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+    const enabled = localStorage.getItem('reviewradar-auto-refresh') === 'true';
+    setAutoRefreshEnabled(enabled);
+    if (!enabled) return;
+
+    const intervalMinutes = parseInt(localStorage.getItem('reviewradar-refresh-interval') || '5', 10);
+    const intervalMs = Math.max(intervalMinutes, 1) * 60 * 1000;
+
+    refreshTimerRef.current = setInterval(() => {
+      const token = pat || localStorage.getItem('github-pat');
+      if (!token) return;
+      if (selectedRepos.size === 0) return;
+      loadPRs({ silent: true });
+    }, intervalMs);
+  }, [pat, selectedRepos.size, loadPRs]);
+
   // Auto-load PRs when repos are already selected and PAT is available
   useEffect(() => {
     const token = pat || localStorage.getItem('github-pat');
@@ -155,6 +218,35 @@ export default function DashboardPage() {
     hasAutoLoaded.current = true;
     loadPRs();
   }, [pat, selectedRepos, allPRs.length, loadPRs]);
+
+  // Auto-refresh timer
+  useEffect(() => {
+    setupAutoRefresh();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setupAutoRefresh();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [setupAutoRefresh]);
+
+  // Time-since-last-refresh updater
+  useEffect(() => {
+    if (!lastRefreshAt) return;
+    const update = () => {
+      const diffSec = Math.floor((Date.now() - lastRefreshAt) / 1000);
+      if (diffSec < 60) setTimeAgo(`${diffSec}s`);
+      else if (diffSec < 3600) setTimeAgo(`${Math.floor(diffSec / 60)}m`);
+      else setTimeAgo(`${Math.floor(diffSec / 3600)}h`);
+    };
+    update();
+    const id = setInterval(update, 30000);
+    return () => clearInterval(id);
+  }, [lastRefreshAt]);
 
   const toggleRepo = (repo: string) => {
     const next = new Set(selectedRepos);
@@ -208,6 +300,27 @@ export default function DashboardPage() {
           <div>
             <h1 className="rr-header-title">{t('title')}</h1>
             <div className="rr-header-sub">{t('subtitle')}</div>
+            {lastRefreshAt && (
+              <div
+                style={{
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: 11,
+                  color: 'var(--muted-dim)',
+                  marginTop: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span>{t('updatedAgo', { time: timeAgo })}</span>
+                {autoRefreshEnabled && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse"></span>
+                    {t('autoRefreshOn')}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="rr-header-actions">
             <div style={{ position: 'relative' }} ref={dropdownRef}>

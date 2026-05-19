@@ -7,12 +7,15 @@ import Chart from 'chart.js/auto';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
 import { useTranslations } from 'next-intl';
+import { computeComplexity } from '@/lib/complexity';
 
 const CHART_COLORS = ['#22d3ee', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#10b981', '#f97316'];
 
 type BuildStatus = { state: string; conclusion: string | null };
 
 type Review = { state: string; user?: { login: string }; submitted_at?: string };
+
+type PRFile = { filename: string; additions: number; deletions: number; changes: number; status: string };
 
 type PR = {
   id: number;
@@ -31,6 +34,10 @@ type PR = {
   mergeable_state?: string;
   mergeable?: boolean;
   head?: { sha: string };
+  files?: PRFile[];
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
 };
 
 function loadJSON<T>(key: string, fallback: T): T {
@@ -171,6 +178,50 @@ async function fetchBuildStatus(pr: PR, pat: string): Promise<BuildStatus> {
   }
 }
 
+async function fetchPRFiles(pr: PR, pat: string): Promise<{ files: PRFile[]; additions: number; deletions: number; changed_files: number }> {
+  try {
+    const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
+    if (!repoMatch || !pr.number) return { files: [], additions: 0, deletions: 0, changed_files: 0 };
+
+    const allFiles: PRFile[] = [];
+    let page = 1;
+    while (page <= 5) {
+      const res = await fetch(
+        `https://api.github.com/repos/${repoMatch[1]}/pulls/${pr.number}/files?per_page=100&page=${page}`,
+        { headers: { Authorization: `token ${pat}`, Accept: 'application/vnd.github.v3+json' } }
+      );
+      if (!res.ok) break;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      allFiles.push(...data);
+      if (data.length < 100) break;
+      page++;
+    }
+
+    let additions = 0;
+    let deletions = 0;
+    for (const f of allFiles) {
+      additions += f.additions || 0;
+      deletions += f.deletions || 0;
+    }
+
+    return {
+      files: allFiles.map((f: any) => ({
+        filename: f.filename,
+        additions: f.additions,
+        deletions: f.deletions,
+        changes: f.changes,
+        status: f.status,
+      })),
+      additions,
+      deletions,
+      changed_files: allFiles.length,
+    };
+  } catch (e) {
+    return { files: [], additions: 0, deletions: 0, changed_files: 0 };
+  }
+}
+
 async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t: any): Promise<PR[]> {
   const allRepos = getStoredRepos();
   const selectedRepos = getSelectedRepos();
@@ -210,7 +261,20 @@ async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t:
     if (i + 10 < withReviews.length)
       setStatusMsg(t('fetchedBuildStatus', { done: Math.min(i + 10, withReviews.length), total: withReviews.length }));
   }
-  return withBuildStatus;
+
+  setStatusMsg(t('fetchingFileSizes', { count: withBuildStatus.length }));
+  const withFiles: PR[] = [];
+  for (let i = 0; i < withBuildStatus.length; i += 10) {
+    const batch = withBuildStatus.slice(i, i + 10);
+    const resolved = await Promise.all(
+      batch.map((pr) => fetchPRFiles(pr, pat).then((fileData) => ({ ...pr, ...fileData })))
+    );
+    withFiles.push(...resolved);
+    if (i + 10 < withFiles.length)
+      setStatusMsg(t('fetchedFiles', { done: Math.min(i + 10, withFiles.length), total: withFiles.length }));
+  }
+
+  return withFiles;
 }
 
 function getRepoNames(prs: PR[]): string[] {
@@ -358,7 +422,24 @@ export default function ReportsPage() {
     }).length;
     const gt7d = data.filter((p) => (now - new Date(p.updated_at || 0).getTime()) / (1000 * 60 * 60) >= 168).length;
 
-    return { total, approved, failingBuilds, noReviews, oneReview, manyReviews, lt24h, lt7d, gt7d };
+    // Complexity metrics
+    const complexityScores = data
+      .filter((p) => (p.files?.length ?? 0) > 0)
+      .map((p) => computeComplexity(p.files!));
+    const avgComplexity = complexityScores.length > 0
+      ? Math.round((complexityScores.reduce((a, b) => a + b, 0) / complexityScores.length) * 10) / 10
+      : 0;
+
+    const complexitySpread = {
+      trivial: complexityScores.filter((s) => s < 15).length,
+      small: complexityScores.filter((s) => s >= 15 && s < 30).length,
+      medium: complexityScores.filter((s) => s >= 30 && s < 50).length,
+      large: complexityScores.filter((s) => s >= 50 && s < 70).length,
+      complex: complexityScores.filter((s) => s >= 70 && s < 90).length,
+      veryComplex: complexityScores.filter((s) => s >= 90).length,
+    };
+
+    return { total, approved, failingBuilds, noReviews, oneReview, manyReviews, lt24h, lt7d, gt7d, avgComplexity, complexitySpread };
   }, []);
 
   const renderPersonChart = useCallback((data: PR[]) => {
@@ -382,6 +463,19 @@ export default function ReportsPage() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10);
     return sorted;
+  }, []);
+
+  const renderComplexityChart = useCallback((data: Record<string, number>) => {
+    const entries = [
+      ['trivial', data.trivial || 0],
+      ['small', data.small || 0],
+      ['medium', data.medium || 0],
+      ['large', data.large || 0],
+      ['complex', data.complex || 0],
+      ['veryComplex', data.veryComplex || 0],
+    ] as [string, number][];
+    const total = entries.reduce((sum, [, v]) => sum + v, 0);
+    return { entries, total };
   }, []);
 
   const loadData = useCallback(async () => {
@@ -474,6 +568,7 @@ export default function ReportsPage() {
   const metrics = view === 'grid' ? renderMetrics(prs) : null;
   const personData = view === 'grid' ? renderPersonChart(prs) : [];
   const labelsData = view === 'grid' ? renderLabelsChart(prs) : [];
+  const complexityData = view === 'grid' && metrics?.complexitySpread ? renderComplexityChart(metrics.complexitySpread) : { entries: [], total: 0 };
 
   return (
     <Layout>
@@ -658,9 +753,9 @@ export default function ReportsPage() {
         {/* Main content grid */}
         {!loading && view === 'grid' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, maxWidth: '100%' }}>
-            {/* Top Metrics Row: Total PRs, Approved, Failing Builds */}
+            {/* Top Metrics Row: Total PRs, Approved, Failing Builds, Avg Complexity */}
             <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('overview')}</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
               <div
                 className="rr-stat"
                 style={{
@@ -737,6 +832,46 @@ export default function ReportsPage() {
                 </div>
                 <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 28, fontWeight: 700, color: 'var(--red)' }}>
                   {metrics?.failingBuilds ?? '—'}
+                </div>
+              </div>
+              <div
+                className="rr-stat"
+                style={{
+                  background: 'var(--ink-light)',
+                  border: '0.5px solid var(--border-faint)',
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  {t('avgComplexity')}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color:
+                      (metrics?.avgComplexity ?? 0) < 30
+                        ? 'var(--green)'
+                        : (metrics?.avgComplexity ?? 0) < 55
+                        ? 'var(--cyan)'
+                        : (metrics?.avgComplexity ?? 0) < 70
+                        ? 'var(--amber)'
+                        : 'var(--red)',
+                  }}
+                >
+                  {metrics?.avgComplexity ?? '—'}
                 </div>
               </div>
             </div>
@@ -1072,6 +1207,94 @@ export default function ReportsPage() {
                             }}
                           >
                             {entry[1]}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Complexity Spread (Horizontal Bar Chart) - Full Width */}
+            <div
+              className="rr-stat"
+              style={{
+                background: 'var(--ink-light)',
+                border: '0.5px solid var(--border-faint)',
+                borderRadius: 12,
+                padding: 20,
+              }}
+            >
+              <div className="rr-stat-label" style={{ marginBottom: 14 }}>
+                {t('complexitySpread')}
+              </div>
+              <div>
+                {complexityData.total === 0 ? (
+                  <p style={{ textAlign: 'center', padding: '40px', fontSize: 12, color: 'var(--muted-dim)' }}>
+                    {t('noComplexityData')}
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {complexityData.entries.map(([key, value], i) => {
+                      const pct = complexityData.total > 0 ? (value / complexityData.total) * 100 : 0;
+                      const barColor =
+                        key === 'trivial'
+                          ? 'var(--green)'
+                          : key === 'small'
+                          ? 'rgba(34,211,238,0.6)'
+                          : key === 'medium'
+                          ? 'var(--cyan)'
+                          : key === 'large'
+                          ? 'var(--amber)'
+                          : key === 'complex'
+                          ? 'rgba(239,68,68,0.6)'
+                          : 'var(--red)';
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div
+                            style={{
+                              fontFamily: "'Space Mono', monospace",
+                              fontSize: 11,
+                              color: 'var(--muted-dim)',
+                              minWidth: 140,
+                              textAlign: 'right',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {t(`complexityLabel.${key}`)}
+                          </div>
+                          <div
+                            style={{
+                              flex: 1,
+                              height: 18,
+                              background: 'rgba(255,255,255,0.04)',
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                              position: 'relative',
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: '100%',
+                                background: barColor,
+                                width: `${pct}%`,
+                                borderRadius: 3,
+                              }}
+                            />
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: "'Space Mono', monospace",
+                              fontSize: 11,
+                              color: 'var(--text-primary)',
+                              minWidth: 30,
+                              textAlign: 'right',
+                            }}
+                          >
+                            {value}
                           </div>
                         </div>
                       );

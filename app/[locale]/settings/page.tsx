@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Layout from '@/components/Layout';
 import { useTranslations } from 'next-intl';
+import { useAppStore, ColumnKey } from '@/lib/store';
 
 interface ColumnConfig {
   id: string;
@@ -53,6 +54,42 @@ export default function SettingsPage() {
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragOverIdRef = useRef<string | null>(null);
+  const storeColumnOrder = useAppStore((s) => s.columnOrder);
+  const setStoreColumnOrder = useAppStore((s) => s.setColumnOrder);
+
+  const SETTINGS_TO_STORE_KEY: Record<string, ColumnKey> = {
+    'pull-request': 'title',
+    'author': 'author',
+    'status': 'status',
+    'my-action': 'myaction',
+    'approvals': 'approvals',
+    'comments': 'comments',
+    'labels': 'labels',
+    'build': 'build',
+    'files': 'files',
+    'size': 'size',
+    'complexity': 'complexity',
+    'created': 'created',
+    'updated': 'updated',
+    'details': 'details',
+  };
+
+  const STORE_TO_SETTINGS_KEY: Record<ColumnKey, string> = {
+    'title': 'pull-request',
+    'author': 'author',
+    'status': 'status',
+    'myaction': 'my-action',
+    'approvals': 'approvals',
+    'comments': 'comments',
+    'labels': 'labels',
+    'build': 'build',
+    'files': 'files',
+    'size': 'size',
+    'complexity': 'complexity',
+    'created': 'created',
+    'updated': 'updated',
+    'details': 'details',
+  };
 
   // Build default columns with translated labels
   useEffect(() => {
@@ -65,11 +102,37 @@ export default function SettingsPage() {
       { id: 'comments', label: t('colComments'), visible: true },
       { id: 'labels', label: t('colLabels'), visible: true },
       { id: 'build', label: t('colBuild'), visible: true },
+      { id: 'files', label: t('colFiles'), visible: true },
+      { id: 'size', label: t('colSize'), visible: true },
+      { id: 'complexity', label: t('colComplexity'), visible: true },
       { id: 'created', label: t('colCreated'), visible: true },
       { id: 'updated', label: t('colUpdated'), visible: true },
       { id: 'details', label: t('colDetails'), visible: true },
     ];
-    setColumns(loadJSON<ColumnConfig[]>('reviewradar-columns', defaultColumns));
+
+    // Load saved visibility from localStorage, but sync order from Zustand store
+    const saved = loadJSON<ColumnConfig[]>('reviewradar-columns', defaultColumns);
+
+    // Reorder to match store's columnOrder
+    const ordered: ColumnConfig[] = [];
+    const seen = new Set<string>();
+    for (const key of storeColumnOrder) {
+      const settingsId = STORE_TO_SETTINGS_KEY[key];
+      const found = saved.find((c) => c.id === settingsId);
+      if (found) {
+        ordered.push({ ...found, id: settingsId });
+        seen.add(settingsId);
+      }
+    }
+    // Append any missing columns
+    for (const col of saved) {
+      if (!seen.has(col.id)) {
+        ordered.push(col);
+      }
+    }
+
+    setColumns(ordered);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);
 
   // Load from localStorage
@@ -201,8 +264,20 @@ export default function SettingsPage() {
     );
   };
 
+  const applyColumnsToStore = (next: ColumnConfig[]) => {
+    const visibleKeys: ColumnKey[] = [];
+    for (const col of next) {
+      if (col.visible) {
+        const key = SETTINGS_TO_STORE_KEY[col.id];
+        if (key) visibleKeys.push(key);
+      }
+    }
+    setStoreColumnOrder(visibleKeys);
+  };
+
   const saveColumns = () => {
     saveJSON('reviewradar-columns', columns);
+    applyColumnsToStore(columns);
   };
 
   const resetColumns = () => {
@@ -215,12 +290,16 @@ export default function SettingsPage() {
       { id: 'comments', label: t('colComments'), visible: true },
       { id: 'labels', label: t('colLabels'), visible: true },
       { id: 'build', label: t('colBuild'), visible: true },
+      { id: 'files', label: t('colFiles'), visible: true },
+      { id: 'size', label: t('colSize'), visible: true },
+      { id: 'complexity', label: t('colComplexity'), visible: true },
       { id: 'created', label: t('colCreated'), visible: true },
       { id: 'updated', label: t('colUpdated'), visible: true },
       { id: 'details', label: t('colDetails'), visible: true },
     ];
     setColumns(defaultColumns);
     saveJSON('reviewradar-columns', defaultColumns);
+    applyColumnsToStore(defaultColumns);
   };
 
   // Data management
