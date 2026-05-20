@@ -118,9 +118,20 @@ export default function DashboardPage() {
         }
       }
 
-      const prsWithReviews = await Promise.all(
-        allPRsData.map((pr) => fetchPRReviews(pr))
-      );
+      // Batch PR review fetching to avoid overwhelming the proxy / GitHub API
+      const BATCH_SIZE = 5;
+      const prsWithReviews: PR[] = [];
+      for (let i = 0; i < allPRsData.length; i += BATCH_SIZE) {
+        const batch = allPRsData.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map((pr) => fetchPRReviews(pr))
+        );
+        prsWithReviews.push(...batchResults);
+        // Small delay between batches to smooth out request load
+        if (i + BATCH_SIZE < allPRsData.length) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      }
 
       setAllPRs(prsWithReviews);
       // Strip large fields before caching to avoid localStorage quota errors
