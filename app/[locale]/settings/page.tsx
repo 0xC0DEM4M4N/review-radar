@@ -5,6 +5,7 @@ import Layout from '@/components/Layout';
 import { useTranslations } from 'next-intl';
 import { useAppStore, ColumnKey } from '@/lib/store';
 import { saveSession, clearSession, checkSession } from '@/lib/apiClient';
+import GitHubOAuthButton from '@/components/GitHubOAuthButton';
 
 interface ColumnConfig {
   id: string;
@@ -344,28 +345,39 @@ export default function SettingsPage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight text-cyan">{t('title')}</h1>
 
-        {/* GitHub Access Token */}
+        {/* GitHub Authentication */}
         <section className="rounded-xl border border-border-faint bg-surface p-5">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
             {t('patTitle')}
           </h2>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              type="password"
-              value={pat}
-              onChange={(e) => {
-                setPat(e.target.value);
-                setPatSaved(false);
-              }}
-              placeholder={t('patPlaceholder')}
-              className="w-full flex-1 rounded-lg border border-border-faint bg-ink-light px-3 py-2 text-sm text-text-primary outline-none placeholder:text-muted-dim focus:border-cyan focus:ring-1 focus:ring-cyan"
-            />
-            <button
-              onClick={savePat}
-              className="shrink-0 rounded-lg bg-cyan-dim px-4 py-2 text-sm font-medium text-cyan transition hover:bg-cyan-mid"
-            >
-              {t('save')}
-            </button>
+
+          <div className="flex flex-col gap-3">
+            <GitHubOAuthButton returnTo={typeof window !== 'undefined' ? window.location.pathname : '/'} />
+
+            <div className="flex items-center gap-3 py-1">
+              <div className="h-px flex-1 bg-border-faint" />
+              <span className="text-xs text-muted-dim">or enter token manually</span>
+              <div className="h-px flex-1 bg-border-faint" />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                type="password"
+                value={pat}
+                onChange={(e) => {
+                  setPat(e.target.value);
+                  setPatSaved(false);
+                }}
+                placeholder={t('patPlaceholder')}
+                className="w-full flex-1 rounded-lg border border-border-faint bg-ink-light px-3 py-2 text-sm text-text-primary outline-none placeholder:text-muted-dim focus:border-cyan focus:ring-1 focus:ring-cyan"
+              />
+              <button
+                onClick={savePat}
+                className="shrink-0 rounded-lg bg-cyan-dim px-4 py-2 text-sm font-medium text-cyan transition hover:bg-cyan-mid"
+              >
+                {t('save')}
+              </button>
+            </div>
           </div>
           {patSaved && (
             <p className="mt-2 text-xs text-green">{t('patSaved')}</p>

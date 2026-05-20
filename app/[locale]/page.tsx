@@ -361,6 +361,49 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           </div>
         </section>
 
+        {/* Security */}
+        <section className="mx-auto max-w-[1280px] border-t border-white/[0.06] px-12 py-[100px] max-md:px-5 max-md:py-[60px]">
+          <div className="mb-4 font-mono text-[11px] uppercase tracking-widest text-cyan">{t('securityLabel')}</div>
+          <h2 className="mb-[60px] max-w-[560px] font-mono text-4xl font-bold leading-tight tracking-tight text-text-primary">
+            {t('securityTitle')}
+          </h2>
+          <div className="grid grid-cols-3 gap-6 max-lg:grid-cols-1">
+            <div className="rounded-2xl border border-border-faint bg-surface p-7 transition-all duration-200 hover:border-cyan/20 hover:bg-cyan/[0.03]">
+              <div className="mb-[18px] flex h-10 w-10 items-center justify-center rounded-[10px] border border-cyan-mid bg-cyan-dim">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <rect x="3" y="7" width="14" height="10" rx="2" fill="none" stroke="#22d3ee" strokeWidth="1.4" />
+                  <path d="M6 7V5a4 4 0 0 1 8 0v2" fill="none" stroke="#22d3ee" strokeWidth="1.4" />
+                  <circle cx="10" cy="12" r="1.5" fill="#22d3ee" />
+                </svg>
+              </div>
+              <h3 className="mb-2.5 font-mono text-sm font-bold text-text-primary">{t('securityFeature1Title')}</h3>
+              <p className="text-sm leading-relaxed text-white/45">{t('securityFeature1Desc')}</p>
+            </div>
+            <div className="rounded-2xl border border-border-faint bg-surface p-7 transition-all duration-200 hover:border-cyan/20 hover:bg-cyan/[0.03]">
+              <div className="mb-[18px] flex h-10 w-10 items-center justify-center rounded-[10px] border border-cyan-mid bg-cyan-dim">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M10 2 L12 7 L17 7 L13 10.5 L14.5 16 L10 12.5 L5.5 16 L7 10.5 L3 7 L8 7 Z" fill="none" stroke="#22d3ee" strokeWidth="1.4" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <h3 className="mb-2.5 font-mono text-sm font-bold text-text-primary">{t('securityFeature2Title')}</h3>
+              <p className="text-sm leading-relaxed text-white/45">{t('securityFeature2Desc')}</p>
+            </div>
+            <div className="rounded-2xl border border-border-faint bg-surface p-7 transition-all duration-200 hover:border-cyan/20 hover:bg-cyan/[0.03]">
+              <div className="mb-[18px] flex h-10 w-10 items-center justify-center rounded-[10px] border border-cyan-mid bg-cyan-dim">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <rect x="2" y="4" width="16" height="12" rx="2.5" fill="none" stroke="#22d3ee" strokeWidth="1.4" />
+                  <line x1="6" y1="8" x2="6" y2="8" stroke="#22d3ee" strokeWidth="1.4" strokeLinecap="round" />
+                  <line x1="10" y1="8" x2="10" y2="8" stroke="#22d3ee" strokeWidth="1.4" strokeLinecap="round" />
+                  <line x1="14" y1="8" x2="14" y2="8" stroke="#22d3ee" strokeWidth="1.4" strokeLinecap="round" />
+                  <line x1="6" y1="12" x2="14" y2="12" stroke="#22d3ee" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </div>
+              <h3 className="mb-2.5 font-mono text-sm font-bold text-text-primary">{t('securityFeature3Title')}</h3>
+              <p className="text-sm leading-relaxed text-white/45">{t('securityFeature3Desc')}</p>
+            </div>
+          </div>
+        </section>
+
         {/* CTA */}
         <section className="border-t border-white/[0.06] px-12 py-20 text-center max-md:px-5 max-md:py-[60px]">
           <h2 className="mb-4 font-mono text-[42px] font-bold leading-tight tracking-tight text-text-primary max-md:text-[28px]">

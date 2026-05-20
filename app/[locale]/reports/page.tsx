@@ -7,6 +7,7 @@ import Chart from 'chart.js/auto';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
 import { useTranslations } from 'next-intl';
+import GitHubOAuthButton from '@/components/GitHubOAuthButton';
 import { computeComplexity } from '@/lib/complexity';
 
 const CHART_COLORS = ['#22d3ee', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#10b981', '#f97316'];
@@ -677,9 +678,12 @@ export default function ReportsPage() {
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
               {t('noPatDescription')}
             </p>
-            <Link href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
-              {t('goToSettings')}
-            </Link>
+            <div className="flex flex-col items-center gap-3">
+              <GitHubOAuthButton />
+              <Link href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+                {t('goToSettings')}
+              </Link>
+            </div>
           </div>
         )}
 

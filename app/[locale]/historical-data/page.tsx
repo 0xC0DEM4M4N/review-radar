@@ -6,6 +6,7 @@ import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
+import GitHubOAuthButton from '@/components/GitHubOAuthButton';
 import { proxyGitHub, checkSession } from '@/lib/apiClient';
 
 const SIZE_COLORS: Record<string, string> = {
@@ -1125,9 +1126,12 @@ export default function HistoricalDataPage() {
           </div>
           <p style={{ fontFamily: "'Space Mono',monospace", fontSize: '14px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('noPatTitle')}</p>
           <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>{t('noPatDescription')}</p>
-          <a href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
-            {t('goToSettings')}
-          </a>
+          <div className="flex flex-col items-center gap-3">
+            <GitHubOAuthButton />
+            <a href={`/${locale}/settings`} className="rr-btn-primary" style={{ textDecoration: 'none' }}>
+              {t('goToSettings')}
+            </a>
+          </div>
         </div>
       )}
 

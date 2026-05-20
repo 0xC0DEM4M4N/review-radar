@@ -38,7 +38,7 @@ export async function proxyGitHub(path: string): Promise<any> {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) throw new Error('Unauthorized — please set your GitHub PAT in Settings.');
+    if (res.status === 401) throw new Error('Unauthorized — please log in with GitHub or set a PAT in Settings.');
     throw new Error(data.error || `GitHub proxy error: ${res.status}`);
   }
   return res.json();

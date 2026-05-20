@@ -9,6 +9,7 @@ import PRDrawer from '@/components/PRDrawer';
 import StatsBar from '@/components/StatsBar';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
+import GitHubOAuthButton from '@/components/GitHubOAuthButton';
 import { useTranslations } from 'next-intl';
 
 export default function DashboardPage() {
@@ -100,6 +101,7 @@ export default function DashboardPage() {
       setCurrentUser(user);
 
       let allPRsData: PR[] = [];
+      const repoErrors: string[] = [];
       if (selectedRepos.size > 0) {
         for (const repo of selectedRepos) {
           try {
@@ -108,8 +110,10 @@ export default function DashboardPage() {
               const repoPRs = await fetchReposPRs(repo.trim());
               allPRsData.push(...repoPRs);
             }
-          } catch (e) {
-            console.warn(`Failed to load ${repo}:`, e);
+          } catch (e: any) {
+            const errMsg = e?.message || String(e);
+            console.warn(`Failed to load ${repo}:`, errMsg);
+            repoErrors.push(`${repo}: ${errMsg}`);
           }
         }
       }
@@ -170,6 +174,15 @@ export default function DashboardPage() {
         showMsg(t('refreshedMessage', { count: prsWithReviews.length, repoCount: discoveredRepos.size }), 'success');
       } else {
         showMsg(t('loadedMessage', { count: prsWithReviews.length, repoCount: discoveredRepos.size }), 'success');
+      }
+
+      if (repoErrors.length > 0) {
+        setTimeout(() => {
+          showMsg(
+            `Some repos failed to load:\n${repoErrors.map((e) => `• ${e}`).join('\n')}`,
+            'error'
+          );
+        }, 100);
       }
     } catch (error: any) {
       showMsg(tc('errorWithMessage', { message: error.message }), 'error');
@@ -403,7 +416,10 @@ export default function DashboardPage() {
               color: message.type === 'error' ? 'var(--red)' : message.type === 'success' ? 'var(--green)' : 'var(--cyan)',
             }}
           >
-            {message.text}
+            <div className="mb-2">{message.text}</div>
+            {message.type === 'error' && message.text.includes('Unauthorized') && (
+              <GitHubOAuthButton label="Log in with GitHub" className="text-xs py-1.5 px-3" />
+            )}
           </div>
         )}
       </div>

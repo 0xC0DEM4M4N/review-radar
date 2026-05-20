@@ -85,6 +85,83 @@ export default function GuidePage() {
           </ul>
         </section>
 
+        <section className="mb-10">
+          <h2 className="mb-3 text-xl font-semibold" style={{ color: 'var(--cyan)' }}>
+            {t('step7Title')}
+          </h2>
+          <p className="mb-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
+            {t('step7Description')}
+          </p>
+
+          <div className="mb-4 rounded-lg border border-border-faint bg-ink-light p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              {t('step7OAuthTitle')}
+            </h3>
+            <p className="mb-2 text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+              {t('step7OAuthDesc')}
+            </p>
+            <ol className="list-inside list-decimal space-y-1 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <li>{t.rich('step7OAuthList1', { code: (chunks) => <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-cyan">{chunks}</code> })}</li>
+              <li>{t.rich('step7OAuthList2', { code: (chunks) => <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-cyan">{chunks}</code> })}</li>
+              <li>{t('step7OAuthList3')}</li>
+            </ol>
+            <p className="mt-2 text-xs leading-relaxed text-amber" style={{ color: 'var(--amber)' }}>
+              {t('step7OAuthNote')}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border-faint bg-ink-light p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              {t('step7PatTitle')}
+            </h3>
+            <p className="mb-2 text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+              {t('step7PatDesc')}
+            </p>
+            <ol className="list-inside list-decimal space-y-1 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <li>
+                {t.rich('step7PatList1', {
+                  githubLink: (chunks) => (
+                    <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80" style={{ color: 'var(--cyan)' }}>{chunks}</a>
+                  ),
+                })}
+              </li>
+              <li>{t.rich('step7PatList2', { code: (chunks) => <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-cyan">{chunks}</code> })}</li>
+              <li>{t('step7PatList3')}</li>
+            </ol>
+          </div>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-3 text-xl font-semibold" style={{ color: 'var(--cyan)' }}>
+            {t('step8Title')}
+          </h2>
+          <p className="mb-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
+            {t('step8Description')}
+          </p>
+          <ul className="list-inside list-disc space-y-2 text-sm" style={{ color: 'var(--text-primary)' }}>
+            <li>{t.rich('step8List1', { strong: (chunks) => <strong>{chunks}</strong> })}</li>
+            <li>{t.rich('step8List2', { strong: (chunks) => <strong>{chunks}</strong> })}</li>
+            <li>{t.rich('step8List3', { strong: (chunks) => <strong>{chunks}</strong> })}</li>
+            <li>{t.rich('step8List4', { strong: (chunks) => <strong>{chunks}</strong> })}</li>
+            <li>{t.rich('step8List5', { strong: (chunks) => <strong>{chunks}</strong> })}</li>
+          </ul>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="mb-3 text-xl font-semibold" style={{ color: 'var(--cyan)' }}>
+            {t('step9Title')}
+          </h2>
+          <p className="mb-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
+            {t('step9Description')}
+          </p>
+          <ul className="list-inside list-disc space-y-2 text-sm" style={{ color: 'var(--text-primary)' }}>
+            <li>{t.rich('step9List1', { strong: (chunks) => <strong>{chunks}</strong>, code: (chunks) => <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-cyan">{chunks}</code> })}</li>
+            <li>{t.rich('step9List2', { strong: (chunks) => <strong>{chunks}</strong> })}</li>
+            <li>{t.rich('step9List3', { strong: (chunks) => <strong>{chunks}</strong>, code: (chunks) => <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-cyan">{chunks}</code> })}</li>
+            <li>{t.rich('step9List4', { strong: (chunks) => <strong>{chunks}</strong> })}</li>
+          </ul>
+        </section>
+
         <section>
           <h2 className="mb-3 text-xl font-semibold" style={{ color: 'var(--cyan)' }}>
             {t('step5Title')}

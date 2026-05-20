@@ -13,7 +13,7 @@ const ALLOWED_PATHS = [
   /^user$/,
 ];
 
-const RATE_LIMIT = 100; // requests per window
+const RATE_LIMIT = 1000; // requests per window
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 
 interface RateRecord {
@@ -107,6 +107,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   const githubUrl = `https://api.github.com/${path}${query}`;
+  const isOAuthToken = pat.startsWith('gho_') || pat.startsWith('ghu_');
 
   try {
     const githubRes = await fetch(githubUrl, {
@@ -119,6 +120,23 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
 
     const body = await githubRes.text();
+
+    if (githubRes.status === 404 && isOAuthToken && path.startsWith('repos/')) {
+      return new Response(
+        JSON.stringify({
+          error:
+            'Repository not found or not accessible. If this repo is under a GitHub organization, your org may have OAuth App restrictions. Try using a Personal Access Token instead.',
+        }),
+        {
+          status: 404,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Content-Type-Options': 'nosniff',
+          },
+        }
+      );
+    }
+
     return new Response(body, {
       status: githubRes.status,
       headers: {
