@@ -50,10 +50,7 @@ function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
-function getStoredPat(): string {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem('github-pat') || '';
-}
+
 
 function getStoredRepos(): string[] {
   return loadJSON<string[]>('github-repos', []);
@@ -81,21 +78,14 @@ function stripLargeDataForStorage(prs: PR[]): PR[] {
   }));
 }
 
-async function ghFetch(url: string, pat: string) {
-  const res = await fetch(url, {
-    headers: { Authorization: `token ${pat}`, Accept: 'application/vnd.github.v3+json' },
-  });
-  if (!res.ok) throw new Error(`GitHub ${res.status}: ${url}`);
-  return res.json();
-}
+import { proxyGitHub } from '@/lib/apiClient';
 
-async function fetchRepoPRs(repo: string, pat: string): Promise<PR[]> {
+async function fetchRepoPRs(repo: string): Promise<PR[]> {
   const prs: PR[] = [];
   for (let page = 1; page <= 5; page++) {
     try {
-      const data = await ghFetch(
-        `https://api.github.com/repos/${repo}/pulls?state=open&per_page=100&page=${page}&sort=updated&direction=desc`,
-        pat
+      const data = await proxyGitHub(
+        `repos/${repo}/pulls?state=open&per_page=100&page=${page}&sort=updated&direction=desc`
       );
       if (!Array.isArray(data) || data.length === 0) break;
       prs.push(...data);
@@ -108,14 +98,13 @@ async function fetchRepoPRs(repo: string, pat: string): Promise<PR[]> {
   return prs;
 }
 
-async function fetchUserSearchPRs(pat: string): Promise<PR[]> {
+async function fetchUserSearchPRs(): Promise<PR[]> {
   const prs: PR[] = [];
   try {
-    const user = await ghFetch('https://api.github.com/user', pat);
+    const user = await proxyGitHub('user');
     for (let page = 1; page <= 3; page++) {
-      const data = await ghFetch(
-        `https://api.github.com/search/issues?q=type:pr+involves:${user.login}+state:open&per_page=100&page=${page}&sort=updated&order=desc`,
-        pat
+      const data = await proxyGitHub(
+        `search/issues?q=type:pr+involves:${encodeURIComponent(user.login)}+state:open&per_page=100&page=${page}&sort=updated&order=desc`
       );
       if (!data.items || data.items.length === 0) break;
       prs.push(...data.items);
@@ -127,50 +116,44 @@ async function fetchUserSearchPRs(pat: string): Promise<PR[]> {
   return prs;
 }
 
-async function fetchReviews(pr: PR, pat: string): Promise<Review[]> {
+async function fetchReviews(pr: PR): Promise<Review[]> {
   try {
     const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
     if (!repoMatch || !pr.number) return [];
-    const data = await ghFetch(`https://api.github.com/repos/${repoMatch[1]}/pulls/${pr.number}/reviews`, pat);
+    const data = await proxyGitHub(`repos/${repoMatch[1]}/pulls/${pr.number}/reviews`);
     return Array.isArray(data) ? data : [];
   } catch (e) {
     return [];
   }
 }
 
-async function fetchBuildStatus(pr: PR, pat: string): Promise<BuildStatus> {
+async function fetchBuildStatus(pr: PR): Promise<BuildStatus> {
   try {
     if (!pr.head || !pr.head.sha) return { state: 'unknown', conclusion: null };
     const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
     if (!repoMatch) return { state: 'unknown', conclusion: null };
 
-    const checksResponse = await fetch(
-      `https://api.github.com/repos/${repoMatch[1]}/commits/${pr.head.sha}/check-runs`,
-      { headers: { Authorization: `token ${pat}`, Accept: 'application/vnd.github.v3+json' } }
-    );
+    const checksData = await proxyGitHub(`repos/${repoMatch[1]}/commits/${pr.head.sha}/check-runs`);
 
     let buildStatus: BuildStatus = { state: 'unknown', conclusion: null };
-    if (checksResponse.ok) {
-      const checksData = await checksResponse.json();
-      if (checksData.check_runs && checksData.check_runs.length > 0) {
-        const statuses: string[] = checksData.check_runs.map((run: any) => run.status);
-        const conclusions: string[] = checksData.check_runs.map((run: any) => run.conclusion).filter((c: any) => c);
+    if (checksData.check_runs && checksData.check_runs.length > 0) {
+      const statuses: string[] = checksData.check_runs.map((run: any) => run.status);
+      const conclusions: string[] = checksData.check_runs.map((run: any) => run.conclusion).filter((c: any) => c);
 
-        if (statuses.includes('in_progress') || statuses.includes('queued')) {
-          buildStatus.state = 'in_progress';
-        } else if (statuses.every((s) => s === 'completed')) {
-          if (conclusions.includes('failure') || conclusions.includes('cancelled')) {
-            buildStatus.state = 'failure';
-          } else if (conclusions.every((c) => c === 'success' || c === 'neutral' || c === 'skipped')) {
-            buildStatus.state = 'success';
-          } else {
-            buildStatus.state = 'pending';
-          }
+      if (statuses.includes('in_progress') || statuses.includes('queued')) {
+        buildStatus.state = 'in_progress';
+      } else if (statuses.every((s) => s === 'completed')) {
+        if (conclusions.includes('failure') || conclusions.includes('cancelled')) {
+          buildStatus.state = 'failure';
+        } else if (conclusions.every((c) => c === 'success' || c === 'neutral' || c === 'skipped')) {
+          buildStatus.state = 'success';
         } else {
-          buildStatus.state = 'in_progress';
+          buildStatus.state = 'pending';
         }
-        buildStatus.conclusion = conclusions[0] || null;
+      } else {
+        buildStatus.state = 'in_progress';
       }
+      buildStatus.conclusion = conclusions[0] || null;
     }
     return buildStatus;
   } catch (e) {
@@ -178,7 +161,7 @@ async function fetchBuildStatus(pr: PR, pat: string): Promise<BuildStatus> {
   }
 }
 
-async function fetchPRFiles(pr: PR, pat: string): Promise<{ files: PRFile[]; additions: number; deletions: number; changed_files: number }> {
+async function fetchPRFiles(pr: PR): Promise<{ files: PRFile[]; additions: number; deletions: number; changed_files: number }> {
   try {
     const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
     if (!repoMatch || !pr.number) return { files: [], additions: 0, deletions: 0, changed_files: 0 };
@@ -186,12 +169,7 @@ async function fetchPRFiles(pr: PR, pat: string): Promise<{ files: PRFile[]; add
     const allFiles: PRFile[] = [];
     let page = 1;
     while (page <= 5) {
-      const res = await fetch(
-        `https://api.github.com/repos/${repoMatch[1]}/pulls/${pr.number}/files?per_page=100&page=${page}`,
-        { headers: { Authorization: `token ${pat}`, Accept: 'application/vnd.github.v3+json' } }
-      );
-      if (!res.ok) break;
-      const data = await res.json();
+      const data = await proxyGitHub(`repos/${repoMatch[1]}/pulls/${pr.number}/files?per_page=100&page=${page}`);
       if (!Array.isArray(data) || data.length === 0) break;
       allFiles.push(...data);
       if (data.length < 100) break;
@@ -222,7 +200,7 @@ async function fetchPRFiles(pr: PR, pat: string): Promise<{ files: PRFile[]; add
   }
 }
 
-async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t: any): Promise<PR[]> {
+async function fetchLivePRs(setStatusMsg: (msg: string) => void, t: any): Promise<PR[]> {
   const allRepos = getStoredRepos();
   const selectedRepos = getSelectedRepos();
   const repos = selectedRepos.length > 0 ? selectedRepos : allRepos;
@@ -230,11 +208,11 @@ async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t:
 
   if (repos.length > 0) {
     setStatusMsg(t('fetchingPRs', { count: repos.length }));
-    const chunks = await Promise.all(repos.map((r) => fetchRepoPRs(r, pat)));
+    const chunks = await Promise.all(repos.map((r) => fetchRepoPRs(r)));
     rawPRs = chunks.flat();
   } else {
     setStatusMsg(t('fetchingYourPRs'));
-    rawPRs = await fetchUserSearchPRs(pat);
+    rawPRs = await fetchUserSearchPRs();
   }
 
   if (rawPRs.length === 0) return [];
@@ -244,7 +222,7 @@ async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t:
   for (let i = 0; i < rawPRs.length; i += 10) {
     const batch = rawPRs.slice(i, i + 10);
     const resolved = await Promise.all(
-      batch.map((pr) => fetchReviews(pr, pat).then((reviews) => ({ ...pr, reviews })))
+      batch.map((pr) => fetchReviews(pr).then((reviews) => ({ ...pr, reviews })))
     );
     withReviews.push(...resolved);
     if (i + 10 < rawPRs.length) setStatusMsg(t('fetchedReviews', { done: Math.min(i + 10, rawPRs.length), total: rawPRs.length }));
@@ -255,7 +233,7 @@ async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t:
   for (let i = 0; i < withReviews.length; i += 10) {
     const batch = withReviews.slice(i, i + 10);
     const resolved = await Promise.all(
-      batch.map((pr) => fetchBuildStatus(pr, pat).then((buildStatus) => ({ ...pr, buildStatus })))
+      batch.map((pr) => fetchBuildStatus(pr).then((buildStatus) => ({ ...pr, buildStatus })))
     );
     withBuildStatus.push(...resolved);
     if (i + 10 < withReviews.length)
@@ -267,7 +245,7 @@ async function fetchLivePRs(pat: string, setStatusMsg: (msg: string) => void, t:
   for (let i = 0; i < withBuildStatus.length; i += 10) {
     const batch = withBuildStatus.slice(i, i + 10);
     const resolved = await Promise.all(
-      batch.map((pr) => fetchPRFiles(pr, pat).then((fileData) => ({ ...pr, ...fileData })))
+      batch.map((pr) => fetchPRFiles(pr).then((fileData) => ({ ...pr, ...fileData })))
     );
     withFiles.push(...resolved);
     if (i + 10 < withFiles.length)
@@ -483,7 +461,6 @@ export default function ReportsPage() {
     setStatus('', false);
     destroyCharts();
 
-    const pat = getStoredPat();
     const raw = localStorage.getItem('reviewradar-prs');
     let cached: PR[] = [];
     try {
@@ -492,8 +469,8 @@ export default function ReportsPage() {
       cached = [];
     }
 
-    // If we have cached data and no PAT, show it immediately
-    if (cached.length > 0 && !pat) {
+    // If we have cached data and no session, show it immediately
+    if (cached.length > 0) {
       const filteredCached = filterPRsBySelectedRepos(cached);
       if (filteredCached.length > 0) {
         showData(filteredCached);
@@ -505,19 +482,15 @@ export default function ReportsPage() {
         setLoading(false);
         return;
       }
-    } else if (!pat) {
-      setLoading(false);
-      setView('noPat');
-      return;
     } else if (getSelectedRepos().length === 0 && getStoredRepos().length === 0) {
       setLoading(false);
       setView('noRepos');
       return;
     }
 
-    // Fetch fresh data if we have a PAT
+    // Fetch fresh data
     try {
-      const fetched = await fetchLivePRs(pat, setStatusMsg, t);
+      const fetched = await fetchLivePRs(setStatusMsg, t);
       if (fetched.length > 0) {
         try {
           const stripped = stripLargeDataForStorage(fetched);

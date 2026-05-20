@@ -15,12 +15,10 @@ export default function DashboardPage() {
   const store = useAppStore();
   const {
     allPRs,
-    pat,
     selectedRepos,
     activeFilters,
     setAllPRs,
     setCurrentUser,
-    setPat,
     setSelectedRepos,
     setLastLoadedRepos,
     setActiveFilter,
@@ -75,11 +73,9 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const savedPat = localStorage.getItem('github-pat');
-    if (savedPat) setPat(savedPat);
     const savedSelections = JSON.parse(localStorage.getItem('selected-repos') || '[]');
     setSelectedRepos(new Set(savedSelections));
-  }, [setPat, setSelectedRepos]);
+  }, [setSelectedRepos]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -97,16 +93,10 @@ export default function DashboardPage() {
   }, []);
 
   const loadPRs = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    const token = pat || localStorage.getItem('github-pat');
-    if (!token) {
-      showMsg(t('pleaseEnterPat'), 'error');
-      return;
-    }
-
     if (!silent) setLoading(true);
 
     try {
-      const user = await fetchCurrentUser(token);
+      const user = await fetchCurrentUser();
       setCurrentUser(user);
 
       let allPRsData: PR[] = [];
@@ -115,7 +105,7 @@ export default function DashboardPage() {
           try {
             const parts = repo.trim().split('/');
             if (parts.length === 2 && parts[0] && parts[1]) {
-              const repoPRs = await fetchReposPRs(repo.trim(), token);
+              const repoPRs = await fetchReposPRs(repo.trim());
               allPRsData.push(...repoPRs);
             }
           } catch (e) {
@@ -125,7 +115,7 @@ export default function DashboardPage() {
       }
 
       const prsWithReviews = await Promise.all(
-        allPRsData.map((pr) => fetchPRReviews(pr, token))
+        allPRsData.map((pr) => fetchPRReviews(pr))
       );
 
       setAllPRs(prsWithReviews);
@@ -186,7 +176,7 @@ export default function DashboardPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [pat, selectedRepos, setAllPRs, setCurrentUser, setLastLoadedRepos, showMsg, t, tc]);
+  }, [selectedRepos, setAllPRs, setCurrentUser, setLastLoadedRepos, showMsg, t, tc]);
 
   const setupAutoRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -201,23 +191,19 @@ export default function DashboardPage() {
     const intervalMs = Math.max(intervalMinutes, 1) * 60 * 1000;
 
     refreshTimerRef.current = setInterval(() => {
-      const token = pat || localStorage.getItem('github-pat');
-      if (!token) return;
       if (selectedRepos.size === 0) return;
       loadPRs({ silent: true });
     }, intervalMs);
-  }, [pat, selectedRepos.size, loadPRs]);
+  }, [selectedRepos.size, loadPRs]);
 
   // Auto-load PRs when repos are already selected and PAT is available
   useEffect(() => {
-    const token = pat || localStorage.getItem('github-pat');
     if (hasAutoLoaded.current) return;
-    if (!token) return;
     if (selectedRepos.size === 0) return;
     if (allPRs.length > 0) return;
     hasAutoLoaded.current = true;
     loadPRs();
-  }, [pat, selectedRepos, allPRs.length, loadPRs]);
+  }, [selectedRepos, allPRs.length, loadPRs]);
 
   // Auto-refresh timer
   useEffect(() => {

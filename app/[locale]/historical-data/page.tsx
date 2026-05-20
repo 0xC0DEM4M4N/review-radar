@@ -6,6 +6,7 @@ import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
+import { proxyGitHub, checkSession } from '@/lib/apiClient';
 
 const SIZE_COLORS: Record<string, string> = {
   Small: '#22c55e',
@@ -103,24 +104,12 @@ function inRange(dateStr: string | null | undefined, range: { allTime: boolean; 
   return true;
 }
 
-async function ghFetch(url: string, pat: string): Promise<any> {
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `token ${pat}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
-  });
-  if (!res.ok) throw new Error(`GitHub ${res.status}: ${url}`);
-  return res.json();
-}
-
-async function fetchRepoPRsAll(repo: string, pat: string): Promise<PRData[]> {
+async function fetchRepoPRsAll(repo: string): Promise<PRData[]> {
   const prs: PRData[] = [];
   for (let page = 1; page <= 10; page++) {
     try {
-      const data = await ghFetch(
-        `https://api.github.com/repos/${repo}/pulls?state=all&per_page=100&page=${page}&sort=updated&direction=desc`,
-        pat
+      const data = await proxyGitHub(
+        `repos/${repo}/pulls?state=all&per_page=100&page=${page}&sort=updated&direction=desc`
       );
       if (!Array.isArray(data) || data.length === 0) break;
       prs.push(...data);
@@ -133,30 +122,24 @@ async function fetchRepoPRsAll(repo: string, pat: string): Promise<PRData[]> {
   return prs;
 }
 
-async function fetchReviews(pr: PRData, pat: string): Promise<Review[]> {
+async function fetchReviews(pr: PRData): Promise<Review[]> {
   try {
     const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
     if (!repoMatch || !pr.number) return [];
-    const data = await ghFetch(
-      `https://api.github.com/repos/${repoMatch[1]}/pulls/${pr.number}/reviews`,
-      pat
-    );
+    const data = await proxyGitHub(`repos/${repoMatch[1]}/pulls/${pr.number}/reviews`);
     return Array.isArray(data) ? data : [];
   } catch (e) {
     return [];
   }
 }
 
-async function fetchPRFiles(pr: PRData, pat: string): Promise<PRFile[]> {
+async function fetchPRFiles(pr: PRData): Promise<PRFile[]> {
   try {
     const repoMatch = (pr.repository_url || pr.url || '').match(/repos\/([^/]+\/[^/]+)/);
     if (!repoMatch || !pr.number) return [];
     const files: PRFile[] = [];
     for (let page = 1; page <= 3; page++) {
-      const data = await ghFetch(
-        `https://api.github.com/repos/${repoMatch[1]}/pulls/${pr.number}/files?per_page=100&page=${page}`,
-        pat
-      );
+      const data = await proxyGitHub(`repos/${repoMatch[1]}/pulls/${pr.number}/files?per_page=100&page=${page}`);
       if (!Array.isArray(data) || data.length === 0) break;
       files.push(...data);
       if (data.length < 100) break;
@@ -261,10 +244,6 @@ export default function HistoricalDataPage() {
     Chart.defaults.font.size = 11;
   }, [t]);
 
-  const getStoredPat = useCallback((): string => {
-    return localStorage.getItem('github-pat') || '';
-  }, []);
-
   const getStoredRepos = useCallback((): string[] => {
     try {
       const v = localStorage.getItem('github-repos');
@@ -310,7 +289,6 @@ export default function HistoricalDataPage() {
     setNoPat(false);
     setNoRepos(false);
 
-    const pat = getStoredPat();
     const repos = getSelectedRepos().length > 0 ? getSelectedRepos() : getStoredRepos();
 
     const start = allTime ? null : parseDateInput(dateFrom);
@@ -318,7 +296,8 @@ export default function HistoricalDataPage() {
     if (end) end.setHours(23, 59, 59, 999);
     const range = { allTime, start, end };
 
-    if (!pat) {
+    const hasSession = await checkSession();
+    if (!hasSession) {
       setLoading(false);
       setNoPat(true);
       setNoRepos(false);
@@ -347,7 +326,7 @@ export default function HistoricalDataPage() {
       setStatusMsg(t('fetchingPRs', { count: repos.length }));
       let allPRs: PRData[] = [];
       for (let i = 0; i < repos.length; i++) {
-        const repoPRs = await fetchRepoPRsAll(repos[i], pat);
+        const repoPRs = await fetchRepoPRsAll(repos[i]);
         allPRs.push(...repoPRs);
         const pct = Math.round(((i + 1) / repos.length) * 10);
         setProgress(pct);
@@ -367,7 +346,7 @@ export default function HistoricalDataPage() {
         : allPRs.filter((pr) => !range.end || !pr.created_at || new Date(pr.created_at) <= range.end);
 
       setStatusMsg(t('fetchingReviews', { count: prsForReviews.length }));
-      const reviewsList = await fetchBatch(prsForReviews, (pr) => fetchReviews(pr, pat), (done, total) => {
+      const reviewsList = await fetchBatch(prsForReviews, (pr) => fetchReviews(pr), (done, total) => {
         const pct = 10 + Math.round((done / total) * 45);
         setProgress(pct);
         updateEta(pct);
@@ -384,7 +363,7 @@ export default function HistoricalDataPage() {
         : allPRs.filter((pr) => inRange(pr.created_at, range));
 
       setStatusMsg(t('fetchingFileSizes', { count: prsForFiles.length }));
-      const filesList = await fetchBatch(prsForFiles, (pr) => fetchPRFiles(pr, pat), (done, total) => {
+      const filesList = await fetchBatch(prsForFiles, (pr) => fetchPRFiles(pr), (done, total) => {
         const pct = 55 + Math.round((done / total) * 45);
         setProgress(pct);
         updateEta(pct);
@@ -407,7 +386,7 @@ export default function HistoricalDataPage() {
       setLoading(false);
       setNoData(true);
     }
-  }, [allTime, dateFrom, dateTo, getStoredPat, getStoredRepos, getSelectedRepos, t, tc]);
+  }, [allTime, dateFrom, dateTo, getStoredRepos, getSelectedRepos, t, tc]);
 
   const showData = useCallback((prs: PRData[], reviewsMap: Record<number, Review[]>, filesMap: Record<number, PRFile[]>, range: { allTime: boolean; start?: Date | null; end?: Date | null }) => {
     setNoData(false);

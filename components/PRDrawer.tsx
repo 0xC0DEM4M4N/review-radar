@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { PR } from '@/lib/store';
 import { computeComplexityBreakdown } from '@/lib/complexity';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { useTranslations } from 'next-intl';
 
 function stripMediaFromHtml(html: string, mediaNotAvailable: string) {
@@ -34,7 +35,9 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
     if (!pr) return;
     marked.setOptions({ breaks: true, gfm: true });
     const desc = pr.body || t('noDescription');
-    setDescription(stripMediaFromHtml(marked(desc) as string, tc('mediaNotAvailable')));
+    const rawDescHtml = marked.parse(desc) as string;
+    const cleanDescHtml = DOMPurify.sanitize(rawDescHtml, { USE_PROFILES: { html: true } });
+    setDescription(stripMediaFromHtml(cleanDescHtml, tc('mediaNotAvailable')));
 
     const allComments: any[] = [];
     if (pr.reviews) {
@@ -66,7 +69,9 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
       const date = new Date(c.date);
       const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const badge = c.type === 'review' ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:4px;background:var(--green);color:var(--ink-light);font-size:10px;font-weight:bold;">${c.state}</span>` : '';
-      const bodyHtml = stripMediaFromHtml(marked(c.body || '') as string, tc('mediaNotAvailable'));
+      const rawBodyHtml = marked.parse(c.body || '') as string;
+      const cleanBodyHtml = DOMPurify.sanitize(rawBodyHtml, { USE_PROFILES: { html: true } });
+      const bodyHtml = stripMediaFromHtml(cleanBodyHtml, tc('mediaNotAvailable'));
       return `
         <div style="border-left:2px solid var(--border-faint);padding-left:12px;margin-bottom:16px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">

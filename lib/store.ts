@@ -93,7 +93,6 @@ interface AppState {
   currentFilter: string;
   currentSort: SortState;
   activeFilters: { label: string | null; status: string | null; author: string | null };
-  pat: string | null;
   selectedRepos: Set<string>;
   columnOrder: ColumnKey[];
   notificationsEnabled: boolean;
@@ -106,7 +105,6 @@ interface AppState {
   setSort: (sort: SortState) => void;
   toggleSort: (column: string) => void;
   setActiveFilter: (type: 'label' | 'status' | 'author', value: string | null) => void;
-  setPat: (pat: string | null) => void;
   setSelectedRepos: (repos: Set<string>) => void;
   toggleRepo: (repo: string) => void;
   setColumnOrder: (order: ColumnKey[]) => void;
@@ -124,7 +122,6 @@ export const useAppStore = create<AppState>()(
       currentFilter: 'all',
       currentSort: [],
       activeFilters: { label: null, status: null, author: null },
-      pat: null,
       selectedRepos: new Set(),
       columnOrder: [...DEFAULT_COLUMNS],
       notificationsEnabled: false,
@@ -148,7 +145,6 @@ export const useAppStore = create<AppState>()(
         set(() => ({
           activeFilters: { label: null, status: null, author: null, [type]: value },
         })),
-      setPat: (pat) => set({ pat }),
       setSelectedRepos: (repos) => set({ selectedRepos: repos }),
       toggleRepo: (repo) =>
         set((state) => {
@@ -166,7 +162,6 @@ export const useAppStore = create<AppState>()(
     {
       name: 'reviewradar-storage',
       partialize: (state) => ({
-        pat: state.pat,
         selectedRepos: Array.from(state.selectedRepos),
         columnOrder: state.columnOrder,
         notificationsEnabled: state.notificationsEnabled,

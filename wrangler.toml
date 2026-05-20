@@ -4,4 +4,7 @@ pages_build_output_dir = "dist"
 
 [vars]
 # Add any public environment variables here if needed
-# All config is client-side for ReviewRadar
+
+# REQUIRED: Set the SESSION_SECRET for encrypting GitHub PATs in cookies.
+# Run: wrangler secret put SESSION_SECRET
+# This secret is used server-side only and must be a long random string.

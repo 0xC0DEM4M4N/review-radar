@@ -37,6 +37,8 @@ export default async function LocaleLayout({
                 var theme = saved || (prefersLight ? 'light' : 'dark');
                 if (theme === 'light') document.documentElement.classList.add('light-mode');
                 else document.documentElement.classList.add('dark-mode');
+                // Migrate: remove old PAT from localStorage (now stored server-side)
+                localStorage.removeItem('github-pat');
               })();
             `,
           }}

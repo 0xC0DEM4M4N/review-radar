@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Layout from '@/components/Layout';
 import { useTranslations } from 'next-intl';
 import { useAppStore, ColumnKey } from '@/lib/store';
+import { saveSession, clearSession, checkSession } from '@/lib/apiClient';
 
 interface ColumnConfig {
   id: string;
@@ -139,9 +140,9 @@ export default function SettingsPage() {
   useEffect(() => {
     setMounted(true);
 
-    const savedPat = localStorage.getItem('github-pat') || '';
-    setPat(savedPat);
-    setPatSaved(!!savedPat);
+    checkSession().then((active) => {
+      setPatSaved(active);
+    });
 
     setRepos(loadJSON<string[]>('github-repos', []));
 
@@ -154,10 +155,15 @@ export default function SettingsPage() {
   }, []);
 
   // Save handlers
-  const savePat = () => {
-    localStorage.setItem('github-pat', pat);
-    setPatSaved(true);
-    setTimeout(() => setPatSaved(false), 2000);
+  const savePat = async () => {
+    try {
+      await saveSession(pat);
+      setPatSaved(true);
+      setPat('');
+      setTimeout(() => setPatSaved(false), 2000);
+    } catch (e: any) {
+      alert(e.message || 'Failed to save PAT');
+    }
   };
 
   const addRepo = () => {
@@ -309,9 +315,10 @@ export default function SettingsPage() {
     localStorage.removeItem('github-repos');
   };
 
-  const clearAllData = () => {
+  const clearAllData = async () => {
     if (!window.confirm(t('confirmClearAll'))) return;
     localStorage.clear();
+    await clearSession();
     setRepos([]);
     setPat('');
     setPatSaved(false);
