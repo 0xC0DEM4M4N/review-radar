@@ -5,6 +5,7 @@ const COOKIE_NAME = 'rr_session';
 
 const ALLOWED_PATHS = [
   /^repos\/[^/]+\/[^/]+\/pulls$/,
+  /^repos\/[^/]+\/[^/]+\/pulls\/\d+$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/files$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/reviews$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/comments$/,
