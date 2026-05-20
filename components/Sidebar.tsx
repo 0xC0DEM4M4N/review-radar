@@ -44,22 +44,44 @@ export default function Sidebar() {
   const pathnameWithoutLocale = pathname?.replace(/^\/(en|fr)(?=\/|$)/, '') || '/';
 
   return (
-    <aside className="rr-sidebar">
-      {navItems.map((item) => {
-        const itemPath = item.href.replace(/^\/(en|fr)/, '');
-        const isActive = pathnameWithoutLocale === itemPath || pathnameWithoutLocale?.startsWith(itemPath + '/');
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`rr-sidebar-icon ${isActive ? 'active' : ''}`}
-            title={item.label}
-          >
-            {item.icon}
-          </Link>
-        );
-      })}
-      <div className="rr-sidebar-spacer" />
-    </aside>
+    <>
+      {/* Desktop sidebar */}
+      <aside className="rr-sidebar">
+        {navItems.map((item) => {
+          const itemPath = item.href.replace(/^\/(en|fr)/, '');
+          const isActive = pathnameWithoutLocale === itemPath || pathnameWithoutLocale?.startsWith(itemPath + '/');
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rr-sidebar-icon ${isActive ? 'active' : ''}`}
+              title={item.label}
+            >
+              {item.icon}
+            </Link>
+          );
+        })}
+        <div className="rr-sidebar-spacer" />
+      </aside>
+
+      {/* Mobile bottom nav */}
+      <nav className="rr-mobile-nav">
+        {navItems.map((item) => {
+          const itemPath = item.href.replace(/^\/(en|fr)/, '');
+          const isActive = pathnameWithoutLocale === itemPath || pathnameWithoutLocale?.startsWith(itemPath + '/');
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`rr-mobile-nav-item ${isActive ? 'active' : ''}`}
+              title={item.label}
+            >
+              {item.icon}
+              <span className="rr-mobile-nav-label">{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }
