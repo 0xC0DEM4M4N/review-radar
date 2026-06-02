@@ -306,6 +306,237 @@
 
   html.light-mode .rr-btn-ghost:hover { background: rgba(0, 0, 0, 0.08); color: var(--text-primary); }
 
+  /* Filter panel */
+  .rr-filter-toggle {
+    background: rgba(255, 255, 255, 0.04);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1;
+  }
+  .rr-filter-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+  }
+  html.light-mode .rr-filter-toggle {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.55);
+  }
+  html.light-mode .rr-filter-toggle:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--text-primary);
+  }
+
+  .rr-filter-badge {
+    background: var(--cyan);
+    color: var(--ink-light);
+    font-size: 10px;
+    font-weight: 700;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .rr-filter-panel {
+    margin-top: 8px;
+  }
+
+  .rr-filter-inner {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    background: var(--ink-light);
+    border: 0.5px solid var(--border-faint);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .rr-filter-field-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1;
+    min-width: 160px;
+  }
+  .rr-filter-field-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  html.light-mode .rr-filter-field-btn {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+  html.light-mode .rr-filter-field-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  .rr-filter-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 240px;
+    background: var(--ink-light);
+    border: 0.5px solid var(--border-faint);
+    border-radius: 10px;
+    box-shadow: var(--shadow-md);
+    z-index: 50;
+    padding: 10px;
+  }
+  html.light-mode .rr-filter-dropdown {
+    background: var(--ink-light);
+  }
+
+  .rr-filter-search-input {
+    width: 100%;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    border: 0.5px solid var(--border-faint);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+    color: var(--text-primary);
+    font-family: 'Space Mono', monospace;
+    outline: none;
+  }
+  .rr-filter-search-input:focus {
+    border-color: var(--cyan);
+  }
+  html.light-mode .rr-filter-search-input {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .rr-filter-clear-row {
+    margin-bottom: 6px;
+  }
+
+  .rr-filter-clear-btn {
+    background: none;
+    border: none;
+    color: var(--cyan);
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    cursor: pointer;
+    padding: 0;
+  }
+  .rr-filter-clear-btn:hover {
+    text-decoration: underline;
+  }
+
+  .rr-filter-options {
+    max-height: 180px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rr-filter-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-primary);
+    transition: background 0.1s;
+  }
+  .rr-filter-option:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+  html.light-mode .rr-filter-option:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .rr-filter-option-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+  }
+
+  .rr-filter-empty {
+    padding: 8px;
+    font-size: 11px;
+    color: var(--muted-dim);
+    font-family: 'Space Mono', monospace;
+    text-align: center;
+  }
+
+  .rr-filter-label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 5px;
+    font-family: 'Space Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .rr-filter-text-input {
+    width: 100%;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 0.5px solid var(--border-faint);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+    color: var(--text-primary);
+    font-family: 'Space Mono', monospace;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .rr-filter-text-input:focus {
+    border-color: var(--cyan);
+  }
+  .rr-filter-text-input::placeholder {
+    color: var(--muted-dim);
+  }
+  html.light-mode .rr-filter-text-input {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .rr-filter-input-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .rr-filter-input-clear:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+  }
+  html.light-mode .rr-filter-input-clear:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
+
   /* Toolbar row */
   .rr-toolbar {
     display: flex;
@@ -748,6 +979,15 @@
   .rr-label-clickable:hover,
   .rr-status-clickable:hover,
   .rr-author-clickable:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+
+  .rr-build-clickable {
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .rr-build-clickable:hover {
     opacity: 0.8;
     transform: scale(1.05);
   }

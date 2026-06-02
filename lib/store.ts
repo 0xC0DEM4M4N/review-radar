@@ -92,8 +92,10 @@ interface AppState {
   currentUser: string | null;
   currentFilter: string;
   currentSort: SortState;
-  activeFilters: { label: string | null; status: string | null; author: string | null };
+  activeFilters: { label: string | null; status: string | null; author: string | null; build: string | null };
   selectedRepos: Set<string>;
+  searchQuery: string;
+  selectedUsers: string[];
   columnOrder: ColumnKey[];
   notificationsEnabled: boolean;
   refreshInterval: number;
@@ -104,9 +106,12 @@ interface AppState {
   setFilter: (filter: string) => void;
   setSort: (sort: SortState) => void;
   toggleSort: (column: string) => void;
-  setActiveFilter: (type: 'label' | 'status' | 'author', value: string | null) => void;
+  setActiveFilter: (type: 'label' | 'status' | 'author' | 'build', value: string | null) => void;
   setSelectedRepos: (repos: Set<string>) => void;
   toggleRepo: (repo: string) => void;
+  setSearchQuery: (query: string) => void;
+  toggleSelectedUser: (user: string) => void;
+  clearSelectedUsers: () => void;
   setColumnOrder: (order: ColumnKey[]) => void;
   setNotificationsEnabled: (v: boolean) => void;
   setRefreshInterval: (v: number) => void;
@@ -121,8 +126,10 @@ export const useAppStore = create<AppState>()(
       currentUser: null,
       currentFilter: 'all',
       currentSort: [],
-      activeFilters: { label: null, status: null, author: null },
+      activeFilters: { label: null, status: null, author: null, build: null },
       selectedRepos: new Set(),
+      searchQuery: '',
+      selectedUsers: [],
       columnOrder: [...DEFAULT_COLUMNS],
       notificationsEnabled: false,
       refreshInterval: 5,
@@ -143,7 +150,7 @@ export const useAppStore = create<AppState>()(
         }),
       setActiveFilter: (type, value) =>
         set(() => ({
-          activeFilters: { label: null, status: null, author: null, [type]: value },
+          activeFilters: { label: null, status: null, author: null, build: null, [type]: value },
         })),
       setSelectedRepos: (repos) => set({ selectedRepos: repos }),
       toggleRepo: (repo) =>
@@ -153,6 +160,15 @@ export const useAppStore = create<AppState>()(
           else next.add(repo);
           return { selectedRepos: next };
         }),
+      setSearchQuery: (query) => set({ searchQuery: query }),
+      toggleSelectedUser: (user) =>
+        set((state) => {
+          const next = new Set(state.selectedUsers);
+          if (next.has(user)) next.delete(user);
+          else next.add(user);
+          return { selectedUsers: Array.from(next) };
+        }),
+      clearSelectedUsers: () => set({ selectedUsers: [] }),
       setColumnOrder: (order) => set({ columnOrder: order }),
       setNotificationsEnabled: (v) => set({ notificationsEnabled: v }),
       setRefreshInterval: (v) => set({ refreshInterval: v }),

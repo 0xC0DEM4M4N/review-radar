@@ -13,6 +13,7 @@
     "moreDetails": "more details",
     "filterByAuthor": "Filter by {author}",
     "filterByStatus": "Filter by status",
+    "filterByBuild": "Filter by build",
     "filterByLabel": "Filter by label",
     "open": "Open",
     "approved": "Approved",
@@ -128,6 +129,7 @@
     "filterPillLabel": "Label: {label}",
     "filterPillStatus": "Status: {status}",
     "filterPillAuthor": "Author: {author}",
+    "filterPillBuild": "Build: {build}",
     "filterPillClose": "×",
     "fetchingPRs": "Fetching pull requests…",
     "pleaseEnterPat": "Please enter a GitHub PAT in settings",
@@ -439,11 +441,23 @@
       "approved": "Approved",
       "blocked": "Blocked"
     },
+    "prfilter": {
+      "filter": "Filter",
+      "users": "Users",
+      "allUsers": "All users",
+      "selectedUsers": "{count} selected",
+      "searchUsers": "Search users...",
+      "clearSelection": "Clear selection",
+      "noUsers": "No users found",
+      "loadPRsFirst": "Load PRs to see users",
+      "ticketSearch": "Search PRs",
+      "ticketPlaceholder": "Title or PR number...",
+      "clearSearch": "Clear search"
+    },
     "prtable": {
       "status": {
         "changesRequested": "Changes req.",
         "buildFail": "Build fail",
-        "needsRebase": "Needs rebase",
         "approved": "Approved",
         "awaitingApproval": "Awaiting approval",
         "draft": "Draft",
@@ -454,6 +468,7 @@
         "fail": "✗ fail",
         "running": "⟳ running",
         "pending": "⟳ pending",
+        "rebase": "↻ rebase",
         "na": "—"
       },
       "userActionApproved": "You approved",

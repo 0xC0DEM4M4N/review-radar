@@ -13,6 +13,7 @@
     "moreDetails": "plus de détails",
     "filterByAuthor": "Filtrer par {author}",
     "filterByStatus": "Filtrer par statut",
+    "filterByBuild": "Filtrer par build",
     "filterByLabel": "Filtrer par étiquette",
     "open": "Ouvert",
     "approved": "Approuvé",
@@ -128,6 +129,7 @@
     "filterPillLabel": "Étiquette : {label}",
     "filterPillStatus": "Statut : {status}",
     "filterPillAuthor": "Auteur : {author}",
+    "filterPillBuild": "Build : {build}",
     "filterPillClose": "×",
     "fetchingPRs": "Récupération des pull requests…",
     "pleaseEnterPat": "Veuillez saisir un PAT GitHub dans les paramètres",
@@ -439,11 +441,23 @@
       "approved": "Approuvés",
       "blocked": "Bloqués"
     },
+    "prfilter": {
+      "filter": "Filtrer",
+      "users": "Utilisateurs",
+      "allUsers": "Tous les utilisateurs",
+      "selectedUsers": "{count} sélectionné",
+      "searchUsers": "Rechercher des utilisateurs...",
+      "clearSelection": "Effacer la sélection",
+      "noUsers": "Aucun utilisateur trouvé",
+      "loadPRsFirst": "Chargez des PRs pour voir les utilisateurs",
+      "ticketSearch": "Rechercher des PRs",
+      "ticketPlaceholder": "Titre ou numéro de PR...",
+      "clearSearch": "Effacer la recherche"
+    },
     "prtable": {
       "status": {
         "changesRequested": "Modifs demandées",
         "buildFail": "Build échoué",
-        "needsRebase": "Rebase nécessaire",
         "approved": "Approuvé",
         "awaitingApproval": "En attente d'approbation",
         "draft": "Brouillon",
@@ -454,6 +468,7 @@
         "fail": "✗ échec",
         "running": "⟳ en cours",
         "pending": "⟳ en attente",
+        "rebase": "↻ rebase",
         "na": "—"
       },
       "userActionApproved": "Vous avez approuvé",

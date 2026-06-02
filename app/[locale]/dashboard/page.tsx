@@ -7,6 +7,7 @@ import { getRepoFullNameFromUrl } from '@/lib/utils';
 import PRTable from '@/components/PRTable';
 import PRDrawer from '@/components/PRDrawer';
 import StatsBar from '@/components/StatsBar';
+import PRFilter from '@/components/PRFilter';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
 import GitHubOAuthButton from '@/components/GitHubOAuthButton';
@@ -43,6 +44,22 @@ export default function DashboardPage() {
   const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null);
   const [timeAgo, setTimeAgo] = useState('');
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Restore cached PRs on mount so filters (users) are available immediately
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('reviewradar-prs');
+      if (cached) {
+        const parsed = JSON.parse(cached) as PR[];
+        if (parsed.length > 0 && allPRs.length === 0) {
+          setAllPRs(parsed);
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
 
   // Migrate column order to include any new default columns
   useEffect(() => {
@@ -276,6 +293,8 @@ export default function DashboardPage() {
     ? t('filterPillStatus', { status: tStatus(activeFilters.status as any) })
     : activeFilters.author
     ? t('filterPillAuthor', { author: activeFilters.author })
+    : activeFilters.build
+    ? t('filterPillBuild', { build: activeFilters.build })
     : null;
 
   return (
@@ -296,7 +315,7 @@ export default function DashboardPage() {
               <path d="M20 20 L38 2" stroke="var(--cyan)" strokeWidth="1" opacity="0.4" className="rr-radar-sweep" />
             </svg>
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 className="rr-header-title">{t('title')}</h1>
             <div className="rr-header-sub">{t('subtitle')}</div>
             {lastRefreshAt && (
@@ -369,6 +388,25 @@ export default function DashboardPage() {
               {loading ? t('loadIconLoading') : t('loadIconIdle')} {t('loadPRs')}
             </button>
 
+            <button
+              onClick={() => setFilterOpen(!filterOpen)}
+              className="rr-filter-toggle"
+              aria-expanded={filterOpen}
+              title="Toggle filters"
+              style={{ marginLeft: 'auto' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              <span>Filter</span>
+              {(store.searchQuery || store.selectedUsers.length > 0) && (
+                <span className="rr-filter-badge">{(store.searchQuery ? 1 : 0) + store.selectedUsers.length}</span>
+              )}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: filterOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
             {activeFilterPill && (
               <span className="rr-pill active">
                 {activeFilterPill}
@@ -377,6 +415,7 @@ export default function DashboardPage() {
                     setActiveFilter('label', null);
                     setActiveFilter('status', null);
                     setActiveFilter('author', null);
+                    setActiveFilter('build', null);
                   }}
                   className="rr-filter-pill-close"
                 >
@@ -386,6 +425,9 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Filter */}
+        <PRFilter isOpen={filterOpen} showToggle={false} />
 
         {/* Stats */}
         <StatsBar />

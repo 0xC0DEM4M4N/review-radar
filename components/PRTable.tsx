@@ -40,16 +40,15 @@ function getConsolidatedReviews(pr: PR) {
   return Object.values(byUser);
 }
 
-type StatusKey = 'changesRequested' | 'buildFail' | 'needsRebase' | 'approved' | 'awaitingApproval' | 'draft' | 'open';
+type StatusKey = 'changesRequested' | 'buildFail' | 'approved' | 'awaitingApproval' | 'draft' | 'open';
 
 function getStatusKey(pr: PR): StatusKey {
   const latest = getConsolidatedReviews(pr);
   const approvalCount = latest.filter((r: any) => r.state === 'APPROVED').length;
   const hasChanges = latest.some((r: any) => r.state === 'CHANGES_REQUESTED');
   const buildFailed = pr.buildStatus?.state === 'failure';
-  const mergeConflict = pr.mergeable_state === 'dirty';
-  if (hasChanges || buildFailed || mergeConflict) {
-    return hasChanges ? 'changesRequested' : buildFailed ? 'buildFail' : 'needsRebase';
+  if (hasChanges || buildFailed) {
+    return hasChanges ? 'changesRequested' : 'buildFail';
   }
   if (approvalCount >= 2) return 'approved';
   if (latest.length > 0) return 'awaitingApproval';
@@ -60,7 +59,6 @@ function getStatusKey(pr: PR): StatusKey {
 const STATUS_BADGE_MAP: Record<StatusKey, string> = {
   changesRequested: 'rr-badge-blocked',
   buildFail: 'rr-badge-blocked',
-  needsRebase: 'rr-badge-blocked',
   approved: 'rr-badge-approved',
   awaitingApproval: 'rr-badge-review',
   draft: 'rr-badge-draft',
@@ -76,6 +74,11 @@ function getBuildKey(pr: PR): BuildKey {
   if (state === 'in_progress') return 'running';
   if (state === 'pending') return 'pending';
   return 'na';
+}
+
+function getBuildFilterKey(pr: PR): BuildKey | 'rebase' {
+  if (pr.mergeable_state === 'dirty') return 'rebase';
+  return getBuildKey(pr);
 }
 
 function getUserAction(pr: PR, currentUser: string | null): '' | 'approved' | 'changesRequested' | 'commented' {
@@ -116,6 +119,8 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     currentSort,
     activeFilters,
     selectedRepos,
+    searchQuery,
+    selectedUsers,
     columnOrder,
     setActiveFilter,
   } = useAppStore();
@@ -186,6 +191,22 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     }
     if (activeFilters.author) {
       prs = prs.filter((pr) => (pr.user?.login || '') === activeFilters.author);
+    }
+    if (activeFilters.build) {
+      prs = prs.filter((pr) => getBuildFilterKey(pr) === activeFilters.build);
+    }
+
+    if (selectedUsers.length > 0) {
+      prs = prs.filter((pr) => selectedUsers.includes(pr.user?.login || ''));
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      prs = prs.filter(
+        (pr) =>
+          (pr.title || '').toLowerCase().includes(q) ||
+          String(pr.number || '').includes(q)
+      );
     }
 
     if (currentSort.length > 0) {
@@ -272,7 +293,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     }
 
     return prs;
-  }, [allPRs, currentUser, currentFilter, currentSort, activeFilters, selectedRepos]);
+  }, [allPRs, currentUser, currentFilter, currentSort, activeFilters, selectedRepos, searchQuery, selectedUsers]);
 
   const renderCell = useCallback((pr: PR, key: ColumnKey) => {
     const authorLogin = pr.user?.login || tc('unknown');
@@ -342,7 +363,12 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
             </span>
           </td>
         );
-      case 'status':
+      case 'status': {
+        const needsRebase = pr.mergeable_state === 'dirty';
+        const badgeClass =
+          statusKey === 'approved' && needsRebase
+            ? 'rr-badge-review'
+            : STATUS_BADGE_MAP[statusKey] || 'rr-badge-open';
         return (
           <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle' }}>
             <span
@@ -350,10 +376,11 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               onClick={(e) => { e.stopPropagation(); setActiveFilter('status', statusKey); }}
               title={tc('filterByStatus')}
             >
-              <span className={`rr-badge ${STATUS_BADGE_MAP[statusKey] || 'rr-badge-open'}`}>{t(`status.${statusKey}`)}</span>
+              <span className={`rr-badge ${badgeClass}`}>{t(`status.${statusKey}`)}</span>
             </span>
           </td>
         );
+      }
       case 'myaction':
         return <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', fontSize: 16, textAlign: 'center' }}>{userAction}</td>;
       case 'approvals':
@@ -376,14 +403,24 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
             )) : <span className="rr-build-na">{t('build.na')}</span>}
           </td>
         );
-      case 'build':
+      case 'build': {
+        const needsRebase = pr.mergeable_state === 'dirty';
+        const bKey = needsRebase ? 'rebase' : buildKey;
+        const bClass = needsRebase ? 'rr-build-run' : buildKey === 'pass' ? 'rr-build-ok' : buildKey === 'fail' ? 'rr-build-fail' : buildKey === 'running' || buildKey === 'pending' ? 'rr-build-run' : 'rr-build-na';
         return (
           <td key={key} style={{ padding: '11px 12px', verticalAlign: 'middle' }}>
-            <span className={buildKey === 'pass' ? 'rr-build-ok' : buildKey === 'fail' ? 'rr-build-fail' : buildKey === 'running' || buildKey === 'pending' ? 'rr-build-run' : 'rr-build-na'}>
-              {t(`build.${buildKey}`)}
+            <span
+              className="rr-build-clickable"
+              onClick={(e) => { e.stopPropagation(); setActiveFilter('build', bKey); }}
+              title={tc('filterByBuild')}
+            >
+              <span className={bClass}>
+                {t(`build.${bKey}`)}
+              </span>
             </span>
           </td>
         );
+      }
       case 'files': {
         const fileCount = pr.changed_files ?? pr.files?.length ?? 0;
         return (
