@@ -2,18 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { isLightTheme } from '@/lib/theme';
+
+function getInitialLight(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.documentElement.getAttribute('data-theme') === 'light';
+}
 
 export default function LoadingIllustration({ width = 240, height = 160 }: { width?: number; height?: number }) {
-  const [isLight, setIsLight] = useState(false);
+  const [isLight, setIsLight] = useState(getInitialLight);
   const t = useTranslations('components.loading');
 
   useEffect(() => {
-    setIsLight(document.documentElement.classList.contains('light-mode'));
-    const observer = new MutationObserver(() => {
-      setIsLight(document.documentElement.classList.contains('light-mode'));
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
+    setIsLight(isLightTheme());
+    const handler = () => setIsLight(isLightTheme());
+    window.addEventListener('themechange', handler);
+    return () => window.removeEventListener('themechange', handler);
   }, []);
 
   return (

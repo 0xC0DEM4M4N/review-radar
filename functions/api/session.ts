@@ -1,9 +1,12 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
-import { encrypt } from '../lib/crypto';
+import { encrypt, decrypt } from '../lib/crypto';
 import { parseCookies, serializeCookie } from '../lib/cookie';
 
 const COOKIE_NAME = 'rr_session';
 const PAT_REGEX = /^(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]+)$/;
+
+// Shorter-lived sessions reduce the window of misuse if a cookie is stolen.
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const secret = context.env.SESSION_SECRET;
@@ -39,7 +42,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       secure: true,
       sameSite: 'Strict',
       path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+      maxAge: SESSION_MAX_AGE_SECONDS,
     });
 
     return new Response(JSON.stringify({ ok: true }), {
@@ -75,9 +78,33 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
   }
 
+  let pat: string;
   try {
-    await decrypt(session, secret);
-    return new Response(JSON.stringify({ active: true }), {
+    pat = await decrypt(session, secret);
+  } catch {
+    return new Response(JSON.stringify({ active: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Verify the token is still valid with GitHub.
+  try {
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `token ${pat}`,
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'ReviewRadar',
+      },
+    });
+    if (!userRes.ok) {
+      return new Response(JSON.stringify({ active: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const userData = (await userRes.json()) as { login?: string };
+    return new Response(JSON.stringify({ active: true, user: userData.login || null }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

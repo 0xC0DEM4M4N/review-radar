@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { ComplexityBreakdown } from './complexity';
 
 export type PRFile = {
   filename: string;
@@ -33,6 +34,9 @@ export type PR = {
   additions?: number;
   deletions?: number;
   changed_files?: number;
+  complexity?: number;
+  effort?: number;
+  complexityBreakdown?: ComplexityBreakdown;
 };
 
 export type SortState = { column: string; direction: 'asc' | 'desc' }[];
@@ -49,6 +53,7 @@ export type ColumnKey =
   | 'files'
   | 'size'
   | 'complexity'
+  | 'effort'
   | 'created'
   | 'updated'
   | 'details';
@@ -82,9 +87,10 @@ export const COLUMN_META: Record<ColumnKey, { sortKey: string | null; width: str
   files: { sortKey: 'files', width: '55px', narrow: true },
   size: { sortKey: 'size', width: '90px', narrow: true },
   complexity: { sortKey: 'complexity', width: '80px', narrow: true },
+  effort: { sortKey: 'effort', width: '80px', narrow: true },
   created: { sortKey: 'created', width: '60px', narrow: true },
   updated: { sortKey: 'updated', width: '60px', narrow: true },
-  details: { sortKey: null, width: '45px', narrow: true },
+  details: { sortKey: null, width: '32px', narrow: true },
 };
 
 interface AppState {
@@ -101,6 +107,7 @@ interface AppState {
   refreshInterval: number;
   prDataMap: Record<number, PR>;
   lastLoadedRepos: Set<string>;
+  repoColors: Record<string, string>;
   setAllPRs: (prs: PR[]) => void;
   setCurrentUser: (user: string | null) => void;
   setFilter: (filter: string) => void;
@@ -115,8 +122,12 @@ interface AppState {
   setColumnOrder: (order: ColumnKey[]) => void;
   setNotificationsEnabled: (v: boolean) => void;
   setRefreshInterval: (v: number) => void;
+  onboardingStep: number | null;
+  setOnboardingStep: (v: number | null) => void;
   setPRDataMap: (map: Record<number, PR>) => void;
   setLastLoadedRepos: (repos: Set<string>) => void;
+  setRepoColor: (repo: string, color: string | null) => void;
+  setRepoColors: (colors: Record<string, string>) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -131,10 +142,12 @@ export const useAppStore = create<AppState>()(
       searchQuery: '',
       selectedUsers: [],
       columnOrder: [...DEFAULT_COLUMNS],
+      onboardingStep: null,
       notificationsEnabled: false,
       refreshInterval: 5,
       prDataMap: {},
       lastLoadedRepos: new Set(),
+      repoColors: {},
       setAllPRs: (prs) => set({ allPRs: prs }),
       setCurrentUser: (user) => set({ currentUser: user }),
       setFilter: (filter) => set({ currentFilter: filter }),
@@ -170,19 +183,30 @@ export const useAppStore = create<AppState>()(
         }),
       clearSelectedUsers: () => set({ selectedUsers: [] }),
       setColumnOrder: (order) => set({ columnOrder: order }),
+      setOnboardingStep: (v) => set({ onboardingStep: v }),
       setNotificationsEnabled: (v) => set({ notificationsEnabled: v }),
       setRefreshInterval: (v) => set({ refreshInterval: v }),
       setPRDataMap: (map) => set({ prDataMap: map }),
       setLastLoadedRepos: (repos) => set({ lastLoadedRepos: repos }),
+      setRepoColor: (repo, color) =>
+        set((state) => {
+          const next = { ...state.repoColors };
+          if (color) next[repo] = color;
+          else delete next[repo];
+          return { repoColors: next };
+        }),
+      setRepoColors: (colors) => set({ repoColors: colors }),
     }),
     {
       name: 'reviewradar-storage',
       partialize: (state) => ({
         selectedRepos: Array.from(state.selectedRepos),
         columnOrder: state.columnOrder,
+        onboardingStep: state.onboardingStep,
         notificationsEnabled: state.notificationsEnabled,
         refreshInterval: state.refreshInterval,
         lastLoadedRepos: Array.from(state.lastLoadedRepos),
+        repoColors: state.repoColors,
       }),
     }
   )

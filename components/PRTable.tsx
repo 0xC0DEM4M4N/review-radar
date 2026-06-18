@@ -8,9 +8,10 @@ import {
   getRepoFullNameFromUrl,
   getRepoNameFromUrl,
   getRepoColorIndex,
+  withOpacity,
 } from '@/lib/utils';
-import { computeComplexity, formatSize, computeComplexityBreakdown } from '@/lib/complexity';
-import { useTranslations } from 'next-intl';
+import { formatSize, computeComplexityBreakdown, computeEffort, formatEffort } from '@/lib/complexity';
+import { useTranslations, useLocale } from 'next-intl';
 
 function getReviewSummary(pr: PR) {
   const reviews = pr.reviews || [];
@@ -111,7 +112,7 @@ function AuthorAvatar({ login, avatarUrl }: { login: string; avatarUrl?: string 
   return <span className="rr-avatar" style={{ background: color }} title={login}>{initials}</span>;
 }
 
-export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => void }) {
+export default function PRTable({ onOpenDrawer, loading }: { onOpenDrawer: (pr: PR) => void; loading?: boolean }) {
   const {
     allPRs,
     currentUser,
@@ -122,11 +123,13 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     searchQuery,
     selectedUsers,
     columnOrder,
+    repoColors,
     setActiveFilter,
   } = useAppStore();
 
   const t = useTranslations('components.prtable');
   const tc = useTranslations('common');
+  const locale = useLocale();
 
   const columnLabels: Record<ColumnKey, string> = {
     title: t('columns.pullRequest'),
@@ -140,9 +143,25 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     files: t('columns.files'),
     size: t('columns.size'),
     complexity: t('columns.complexity'),
+    effort: t('columns.effort'),
     created: t('columns.created'),
     updated: t('columns.updated'),
-    details: t('columns.details'),
+    details: '',
+  };
+
+  const [pageSize, setPageSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('reviewradar-page-size');
+      const n = parseInt(saved || '25', 10);
+      return n >= 0 ? n : 25;
+    } catch { return 25; }
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const handlePageSize = (val: number) => {
+    setPageSize(val);
+    setCurrentPage(1);
+    try { localStorage.setItem('reviewradar-page-size', String(val)); } catch {}
   };
 
   const filteredPRs = useMemo(() => {
@@ -162,16 +181,15 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     } else if (currentFilter === 'blocked') {
       prs = prs.filter((pr) =>
         pr.buildStatus?.state === 'failure' ||
-        pr.mergeable_state === 'dirty' ||
-        pr.reviews?.some((r) => r.state === 'CHANGES_REQUESTED')
+        pr.mergeable_state === 'dirty'
       );
     } else if (currentFilter === 'needs-attention') {
       prs = prs.filter((pr) => {
         const isNotByMe = (pr.user?.login || '') !== currentUser;
         const isNotDraft = !pr.draft;
         const hasNotReviewedByMe = !pr.reviews?.some((r) => r.user?.login === currentUser);
-        const hasNoApprovals = !pr.reviews?.some((r) => r.state === 'APPROVED');
-        return isNotByMe && isNotDraft && hasNotReviewedByMe && hasNoApprovals;
+        const hasFewerThanTwoApprovals = getConsolidatedReviews(pr).filter((r: any) => r.state === 'APPROVED').length < 2;
+        return isNotByMe && isNotDraft && hasNotReviewedByMe && hasFewerThanTwoApprovals;
       });
       if (currentSort.length === 0) {
         prs.sort((a, b) => {
@@ -198,6 +216,8 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
 
     if (selectedUsers.length > 0) {
       prs = prs.filter((pr) => selectedUsers.includes(pr.user?.login || ''));
+    } else if (selectedUsers.length === 0) {
+      prs = [];
     }
 
     if (searchQuery.trim()) {
@@ -260,8 +280,13 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               break;
             }
             case 'complexity': {
-              aVal = computeComplexity(a.files || []);
-              bVal = computeComplexity(b.files || []);
+              aVal = a.complexity ?? computeComplexityBreakdown(a.files || []).score;
+              bVal = b.complexity ?? computeComplexityBreakdown(b.files || []).score;
+              break;
+            }
+            case 'effort': {
+              aVal = a.effort ?? computeEffort(a);
+              bVal = b.effort ?? computeEffort(b);
               break;
             }
             case 'created':
@@ -295,6 +320,14 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     return prs;
   }, [allPRs, currentUser, currentFilter, currentSort, activeFilters, selectedRepos, searchQuery, selectedUsers]);
 
+  const totalPages = pageSize > 0 ? Math.max(1, Math.ceil(filteredPRs.length / pageSize)) : 1;
+  useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [totalPages, currentPage]);
+  const displayPRs = useMemo(() => {
+    if (pageSize <= 0) return filteredPRs;
+    const start = (currentPage - 1) * pageSize;
+    return filteredPRs.slice(start, start + pageSize);
+  }, [filteredPRs, currentPage, pageSize]);
+
   const renderCell = useCallback((pr: PR, key: ColumnKey) => {
     const authorLogin = pr.user?.login || tc('unknown');
     const isOwned = authorLogin === currentUser;
@@ -303,10 +336,15 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     const prTitle = pr.title || tc('untitledPR');
     const prUrl = pr.html_url || '#';
     const repoColorIdx = getRepoColorIndex(fullRepoName);
+    const customRepoColor = repoColors[fullRepoName];
     const showRepo = selectedRepos.size !== 1;
     const repoMeta = showRepo ? (
       <div className="rr-pr-repo">
-        <span className={`rr-radar-blip-sm repo-color-${repoColorIdx}`} />{fullRepoName}
+        <span
+          className={`rr-radar-blip-sm ${customRepoColor ? '' : `repo-color-${repoColorIdx}`}`}
+          style={customRepoColor ? { background: customRepoColor } : undefined}
+        />
+        {fullRepoName}
       </div>
     ) : null;
     const reviewSummary = getReviewSummary(pr);
@@ -317,36 +355,36 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
     const userActionKey = getUserAction(pr, currentUser);
     const userAction =
       userActionKey === 'approved' ? (
-        <span title={t('userActionApproved')}>
+        <span title={t('userActionApproved')} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 8L6.5 11.5L13 4.5" />
           </svg>
         </span>
       ) : userActionKey === 'changesRequested' ? (
-        <span title={t('userActionChangesRequested')}>
+        <span title={t('userActionChangesRequested')} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--amber)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M13 8H3M3 8L7 4M3 8L7 12" />
           </svg>
         </span>
       ) : userActionKey === 'commented' ? (
-        <span title={t('userActionCommented')}>
+        <span title={t('userActionCommented')} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--cyan)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 7.5C14 10.5376 11.5376 13 8.5 13H8L3.5 15V13H3C2.17157 13 1.5 12.3284 1.5 11.5V4.5C1.5 3.67157 2.17157 3 3 3H13C13.8284 3 14.5 3.67157 14.5 4.5V7.5Z" />
           </svg>
         </span>
       ) : '';
     const todayLabel = tc('today');
-    const { dateStr: createdDate, timeStr: createdTime } = formatDateSplit(pr.created_at, todayLabel);
-    const { dateStr: updatedDate, timeStr: updatedTime } = formatDateSplit(pr.updated_at, todayLabel);
+    const { dateStr: createdDate, timeStr: createdTime } = formatDateSplit(pr.created_at, todayLabel, locale);
+    const { dateStr: updatedDate, timeStr: updatedTime } = formatDateSplit(pr.updated_at, todayLabel, locale);
     const statusKey = getStatusKey(pr);
     const buildKey = getBuildKey(pr);
 
     switch (key) {
       case 'title':
         return (
-          <td key={key} style={{ padding: '11px 12px', verticalAlign: 'middle' }}>
+          <td key={key} style={{ padding: '11px 12px', verticalAlign: 'middle', cursor: 'pointer' }} onClick={() => onOpenDrawer(pr)}>
             <div>
-              <a href={prUrl} target="_blank" className="rr-pr-title" title={prTitle}>{prTitle}</a>
+              <a href={prUrl} target="_blank" className="rr-pr-title" title={prTitle} onClick={(e) => e.stopPropagation()}>{prTitle}</a>
               {repoMeta}
             </div>
           </td>
@@ -382,7 +420,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
         );
       }
       case 'myaction':
-        return <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', fontSize: 16, textAlign: 'center' }}>{userAction}</td>;
+        return <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center', fontSize: 16 }}>{userAction}</td>;
       case 'approvals':
         return <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center' }}>{approvalsDisplay}</td>;
       case 'comments':
@@ -440,8 +478,8 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
         );
       }
       case 'complexity': {
-        const breakdown = computeComplexityBreakdown(pr.files || []);
-        const score = breakdown.score;
+        const breakdown = pr.complexityBreakdown || computeComplexityBreakdown(pr.files || []);
+        const score = pr.complexity ?? breakdown.score;
         let complexityColor = 'var(--muted-dim)';
         if (score >= 70) complexityColor = 'var(--red)';
         else if (score >= 50) complexityColor = 'var(--amber)';
@@ -479,6 +517,22 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
           </td>
         );
       }
+      case 'effort': {
+        const effort = pr.effort ?? computeEffort(pr);
+        const effortStr = formatEffort(effort);
+        let color = 'var(--muted-dim)';
+        if (effort >= 120) color = 'var(--red)';
+        else if (effort >= 60) color = 'var(--amber)';
+        else if (effort >= 30) color = 'var(--cyan)';
+        else if (effort > 0) color = 'var(--green)';
+        return (
+          <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color, fontFamily: "'Space Mono', monospace" }}>
+              {effortStr}
+            </span>
+          </td>
+        );
+      }
       case 'created':
         return (
           <td key={key} className="rr-age" style={{ verticalAlign: 'middle' }}>
@@ -503,8 +557,8 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
             <button
               onClick={(e) => { e.stopPropagation(); onOpenDrawer(pr); }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', transition: 'color 200ms', fontSize: 16 }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)'; }}
               title={tc('moreDetails')}
             >
               ⋯
@@ -522,6 +576,22 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
   const thRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  const updateTableWidth = useCallback(() => {
+    if (!tableRef.current) return;
+    let total = 0;
+    columnOrder.forEach((k) => {
+      const cell = thRefs.current[k];
+      if (cell && cell.style.width) {
+        total += parseInt(cell.style.width, 10);
+      }
+    });
+    if (total > 0) {
+      const gap = (columnOrder.length + 1) * 2;
+      tableRef.current.style.width = total + gap + 'px';
+    }
+  }, [columnOrder]);
 
   useEffect(() => {
     try {
@@ -531,6 +601,12 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
       setColWidths({});
     }
   }, []);
+
+  useEffect(() => {
+    if (Object.keys(colWidths).length > 0 || columnOrder.length > 0) {
+      requestAnimationFrame(updateTableWidth);
+    }
+  }, [colWidths, columnOrder, updateTableWidth]);
 
   const beginResize = useCallback((e: React.MouseEvent, key: string) => {
     e.stopPropagation();
@@ -566,6 +642,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
       });
       setColWidths(widths);
       localStorage.setItem('reviewradar-column-widths', JSON.stringify(widths));
+      updateTableWidth();
 
       setTimeout(() => {
         draggingRef.current = null;
@@ -578,7 +655,7 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
 
   return (
     <div className="rr-table-wrap">
-      <table>
+      <table ref={tableRef}>
         <thead>
           <tr>
             {columnOrder.map((key) => {
@@ -614,7 +691,20 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
           </tr>
         </thead>
         <tbody>
-          {filteredPRs.length === 0 ? (
+          {loading ? (
+            Array.from({ length: 8 }).map((_, rowIdx) => (
+              <tr key={rowIdx} style={{ opacity: 0.4 }}>
+                {columnOrder.map((key) => {
+                  const meta = COLUMN_META[key];
+                  return (
+                    <td key={key} className={meta?.narrow ? 'rr-col-narrow' : ''} style={{ padding: '11px 12px', verticalAlign: 'middle' }}>
+                      <div className="rr-skeleton" style={{ height: 12, width: meta?.narrow ? 24 : '60%' }} />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
+          ) : filteredPRs.length === 0 ? (
             <tr>
               <td colSpan={columnOrder.length} style={{ padding: '64px 32px', textAlign: 'center', color: 'var(--muted-dim)' }}>
                 <div style={{ margin: '0 auto 16px', width: 48, height: 48, borderRadius: '50%', background: 'var(--cyan-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -625,14 +715,30 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
               </td>
             </tr>
           ) : (
-            filteredPRs.map((pr) => {
+            displayPRs.map((pr) => {
               const authorLogin = pr.user?.login || tc('unknown');
               const isOwned = authorLogin === currentUser;
               const repoUrl = pr.repository_url || pr.url || '';
               const fullRepoName = getRepoFullNameFromUrl(repoUrl);
               const repoColorIdx = getRepoColorIndex(fullRepoName);
+              const rowCustomColor = repoColors[fullRepoName];
               return (
-                <tr key={pr.id} className={`${isOwned ? 'owned-pr' : ''} repo-bg-${repoColorIdx}`}>
+                <tr
+                  key={pr.id}
+                  className={`${isOwned ? 'owned-pr' : ''} ${rowCustomColor ? 'repo-bg-custom' : `repo-bg-${repoColorIdx}`}`}
+                  style={rowCustomColor ? {
+                    ['--repo-custom-bg' as any]: withOpacity(rowCustomColor, 0.04),
+                    ['--repo-custom-bg-hover' as any]: withOpacity(rowCustomColor, 0.07),
+                    outline: 'none',
+                  } : { outline: 'none' }}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpenDrawer(pr);
+                    }
+                  }}
+                >
                   {columnOrder.map((key) => renderCell(pr, key))}
                 </tr>
               );
@@ -640,6 +746,84 @@ export default function PRTable({ onOpenDrawer }: { onOpenDrawer: (pr: PR) => vo
           )}
         </tbody>
       </table>
+
+      {filteredPRs.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', fontSize: 12, borderTop: '0.5px solid var(--border-faint)', background: 'var(--surface)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {pageSize > 0 ? (
+              <span style={{ color: 'var(--muted)' }}>
+                {`${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredPRs.length)} of ${filteredPRs.length}`}
+              </span>
+            ) : (
+              <span style={{ color: 'var(--muted)' }}>{`${filteredPRs.length} PRs`}</span>
+            )}
+            <span style={{ color: 'var(--border-faint)' }}>|</span>
+            <span style={{ color: 'var(--muted-dim)', fontSize: 11 }}>per page:</span>
+            {[10, 25, 50, 100, 0].map((n) => (
+              <button
+                key={n}
+                onClick={() => handlePageSize(n)}
+                style={{
+                  background: pageSize === n ? 'var(--cyan)' : 'transparent',
+                  color: pageSize === n ? '#fff' : 'var(--muted)',
+                  border: '0.5px solid', borderColor: pageSize === n ? 'var(--cyan)' : 'var(--border-faint)',
+                  borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11,
+                  fontWeight: pageSize === n ? 600 : 400,
+                }}
+              >{n === 0 ? 'All' : n}</button>
+            ))}
+          </div>
+          {pageSize > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                aria-label={tc('previous')}
+                style={{
+                  background: 'transparent', border: '0.5px solid var(--border-faint)', borderRadius: 4,
+                  padding: '4px 10px', cursor: currentPage <= 1 ? 'default' : 'pointer',
+                  opacity: currentPage <= 1 ? 0.3 : 1, fontSize: 12, color: 'var(--muted)',
+                }}
+              >‹ Prev</button>
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 7) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 4) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 3) {
+                  pageNum = totalPages - 6 + i;
+                } else {
+                  pageNum = currentPage - 3 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    style={{
+                      background: currentPage === pageNum ? 'var(--cyan)' : 'transparent',
+                      color: currentPage === pageNum ? '#fff' : 'var(--muted)',
+                      border: '0.5px solid', borderColor: currentPage === pageNum ? 'var(--cyan)' : 'transparent',
+                      borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: 12,
+                      fontWeight: currentPage === pageNum ? 600 : 400, minWidth: 28, textAlign: 'center',
+                    }}
+                  >{pageNum}</button>
+                );
+              })}
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                aria-label={tc('next')}
+                style={{
+                  background: 'transparent', border: '0.5px solid var(--border-faint)', borderRadius: 4,
+                  padding: '4px 10px', cursor: currentPage >= totalPages ? 'default' : 'pointer',
+                  opacity: currentPage >= totalPages ? 0.3 : 1, fontSize: 12, color: 'var(--muted)',
+                }}
+              >Next ›</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

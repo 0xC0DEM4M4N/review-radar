@@ -289,6 +289,88 @@ export default function GuidePage() {
             </p>
           </div>
         </section>
+
+        {/* Step 10: Reports */}
+        <section className="mb-10">
+          <h2 className="mb-3 text-xl font-semibold" style={{ color: 'var(--cyan)' }}>
+            {t('step10Title')}
+          </h2>
+          <p className="mb-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
+            {t('step10Description')}
+          </p>
+
+          <div className="mb-6 rounded-lg border border-border-faint bg-ink-light p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              {t('step10WatchdogTitle')}
+            </h3>
+            <p className="mb-2 text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+              {t('step10WatchdogDesc')}
+            </p>
+            <p className="mb-1 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {t('step10WatchdogHow')}
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <li>{t('step10WatchdogRule1')}</li>
+              <li>{t('step10WatchdogRule2')}</li>
+              <li>{t('step10WatchdogRule3')}</li>
+              <li>{t('step10WatchdogRule4')}</li>
+              <li>{t('step10WatchdogRule5')}</li>
+              <li>{t('step10WatchdogRule6')}</li>
+            </ul>
+          </div>
+
+          <div className="mb-6 rounded-lg border border-border-faint bg-ink-light p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              {t('step10VelocityTitle')}
+            </h3>
+            <p className="mb-2 text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+              {t('step10VelocityDesc')}
+            </p>
+            <p className="mb-1 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {t('step10VelocityHow')}
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <li>{t('step10VelocityRule1')}</li>
+              <li>{t('step10VelocityRule2')}</li>
+              <li>{t('step10VelocityRule3')}</li>
+              <li>{t('step10VelocityRule4')}</li>
+              <li>{t('step10VelocityRule5')}</li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-border-faint bg-ink-light p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              {t('step10BurnoutTitle')}
+            </h3>
+            <p className="mb-2 text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+              {t('step10BurnoutDesc')}
+            </p>
+            <p className="mb-1 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {t('step10BurnoutHow')}
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <li>{t('step10BurnoutRule1')}</li>
+              <ul className="list-circle list-inside ml-4 space-y-1 text-xs" style={{ color: 'var(--text-primary)' }}>
+                <li>{t('step10BurnoutRule1a')}</li>
+                <li>{t('step10BurnoutRule1b')}</li>
+                <li>{t('step10BurnoutRule1c')}</li>
+              </ul>
+              <li>{t('step10BurnoutRule2')}</li>
+              <li>{t('step10BurnoutRule3')}</li>
+              <ul className="list-circle list-inside ml-4 space-y-1 text-xs" style={{ color: 'var(--text-primary)' }}>
+                <li>{t('step10BurnoutRisk1')}</li>
+                <li>{t('step10BurnoutRisk2')}</li>
+                <li>{t('step10BurnoutRisk3')}</li>
+              </ul>
+            </ul>
+            <p className="mt-3 text-xs leading-relaxed" style={{ color: 'var(--muted-dim)', fontStyle: 'italic' }}>
+              {t('step10BurnoutNote')}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed" style={{ color: 'var(--muted-dim)' }}>
+              {t('step10BurnoutSuggestion')}
+            </p>
+          </div>
+        </section>
       </div>
     </Layout>
   );

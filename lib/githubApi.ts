@@ -1,6 +1,7 @@
-import { PR } from './store';
+import type { PR } from './store';
 import { getRepoFullNameFromUrl } from './utils';
 import { proxyGitHub } from './apiClient';
+import { computeComplexityBreakdown, computeEffort } from './complexity';
 
 const REPO_REGEX = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
 
@@ -17,7 +18,11 @@ function stripApiBase(url: string): string {
 export async function fetchReposPRs(repo: string): Promise<PR[]> {
   validateRepo(repo);
   const [owner, name] = repo.trim().split('/');
-  return proxyGitHub(`repos/${owner}/${name}/pulls?state=open&per_page=100`);
+  const t = `      ⏱️ repo ${owner}/${name}`;
+  console.time(t);
+  const data = await proxyGitHub(`repos/${owner}/${name}/pulls?state=open&per_page=100`);
+  console.timeEnd(t);
+  return data;
 }
 
 export async function fetchUserPRs(username: string): Promise<PR[]> {
@@ -31,6 +36,9 @@ export async function fetchPRFiles(prUrl: string): Promise<{ files: any[]; addit
   const basePath = stripApiBase(prUrl);
   const allFiles: any[] = [];
   let page = 1;
+  const prNum = basePath.match(/\/(\d+)$/)?.[1] || '?';
+  const t = `        ⏱️ files-pages #${prNum}`;
+  console.time(t);
   try {
     while (page <= 5) {
       const data = await proxyGitHub(`${basePath}/files?per_page=100&page=${page}`);
@@ -44,6 +52,7 @@ export async function fetchPRFiles(prUrl: string): Promise<{ files: any[]; addit
   } catch (e) {
     console.warn('Error fetching PR files:', e);
   }
+  console.timeEnd(t);
 
   let additions = 0;
   let deletions = 0;
@@ -60,95 +69,107 @@ export async function fetchPRFiles(prUrl: string): Promise<{ files: any[]; addit
   };
 }
 
+function processCheckRuns(checksData: any): { state: string; conclusion?: string; checkRuns?: any[] } {
+  if (!checksData?.check_runs?.length) return { state: 'unknown' };
+  const runs = checksData.check_runs;
+  const runStatuses = runs.map((run: any) => run.status);
+  const conclusions = runs
+    .map((run: any) => run.conclusion)
+    .filter((c: any) => c);
+  let state = 'unknown';
+  if (runStatuses.includes('in_progress') || runStatuses.includes('queued')) {
+    state = 'in_progress';
+  } else if (runStatuses.every((s: string) => s === 'completed')) {
+    if (conclusions.includes('failure') || conclusions.includes('cancelled')) {
+      state = 'failure';
+    } else if (
+      conclusions.every(
+        (c: string) => c === 'success' || c === 'neutral' || c === 'skipped'
+      )
+    ) {
+      state = 'success';
+    } else {
+      state = 'pending';
+    }
+  } else {
+    state = 'in_progress';
+  }
+  return { state, conclusion: conclusions[0] || undefined, checkRuns: runs };
+}
+
 export async function fetchPRReviews(pr: PR): Promise<PR> {
-  // Resolve the correct PR URL
-  let prUrl = pr.url || pr.html_url || '';
-  if (pr.pull_request?.url) {
-    prUrl = pr.pull_request.url;
-    if (prUrl.includes('{')) {
-      prUrl = prUrl.replace('{/number}', '');
-    }
-  } else if (prUrl.includes('/issues/')) {
-    prUrl = prUrl.replace('/issues/', '/pulls/');
-  }
-  if (!prUrl) {
-    return { ...pr, mergeable_state: pr.mergeable_state || 'unknown', reviews: [], comments: [], buildStatus: { state: 'unknown', conclusion: undefined, checkRuns: [] } };
-  }
+  const prNum = pr.number || (pr as any).id;
+  const t = `      ⏱️ pr #${prNum}`;
+  console.time(t);
 
-  const basePath = stripApiBase(prUrl);
+  const repoFullName =
+    pr.head?.repo?.full_name ||
+    (pr.repository_url ? getRepoFullNameFromUrl(pr.repository_url) : '');
 
-  // Fetch PR details for mergeable_state
-  let mergeable_state = pr.mergeable_state || 'unknown';
-  try {
-    const prDetails = await proxyGitHub(basePath);
-    mergeable_state = prDetails.mergeable_state || 'unknown';
-  } catch (e) {
-    console.warn('Error fetching PR details for mergeable_state:', e);
-  }
-
-  // Fetch reviews
   let reviews: any[] = [];
-  try {
-    reviews = await proxyGitHub(`${basePath}/reviews`);
-  } catch (e) {
-    console.warn('Error fetching reviews:', e);
-  }
-
-  // Fetch comments
   let comments: any[] = [];
-  try {
-    comments = await proxyGitHub(`${basePath}/comments`);
-  } catch (e) {
-    console.warn('Error fetching comments:', e);
-  }
-
-  // Fetch build status via check-runs (avoids CORS issues with /statuses)
   let buildStatus: { state: string; conclusion?: string; checkRuns?: any[] } = { state: 'unknown' };
-  try {
-    if (pr.head && pr.head.sha) {
-      const repoFullName =
-        pr.head.repo?.full_name ||
-        (pr.repository_url ? getRepoFullNameFromUrl(pr.repository_url) : '');
-      if (repoFullName) {
-        const checksData = await proxyGitHub(
-          `repos/${repoFullName}/commits/${pr.head.sha}/check-runs`
-        );
-        if (checksData.check_runs && checksData.check_runs.length > 0) {
-          buildStatus.checkRuns = checksData.check_runs;
-          const runStatuses = checksData.check_runs.map((run: any) => run.status);
-          const conclusions = checksData.check_runs
-            .map((run: any) => run.conclusion)
-            .filter((c: any) => c);
+  let files: any[] = [];
+  let fileAdditions = 0;
+  let fileDeletions = 0;
 
-          if (runStatuses.includes('in_progress') || runStatuses.includes('queued')) {
-            buildStatus.state = 'in_progress';
-          } else if (runStatuses.every((s: string) => s === 'completed')) {
-            if (conclusions.includes('failure') || conclusions.includes('cancelled')) {
-              buildStatus.state = 'failure';
-            } else if (
-              conclusions.every(
-                (c: string) => c === 'success' || c === 'neutral' || c === 'skipped'
-              )
-            ) {
-              buildStatus.state = 'success';
-            } else {
-              buildStatus.state = 'pending';
-            }
-          } else {
-            buildStatus.state = 'in_progress';
-          }
-          buildStatus.conclusion = conclusions[0] || undefined;
-        }
+  if (repoFullName && prNum) {
+    const sha = pr.head?.sha || '';
+    try {
+      const batch = await proxyGitHub(
+        `batch/pr/${repoFullName}/${prNum}${sha ? `?sha=${sha}` : ''}`
+      );
+      if (Array.isArray(batch.reviews)) reviews = batch.reviews;
+      if (Array.isArray(batch.comments)) comments = batch.comments;
+      if (Array.isArray(batch.files)) {
+        files = batch.files;
+        fileAdditions = files.reduce((sum: number, f: any) => sum + (f.additions || 0), 0);
+        fileDeletions = files.reduce((sum: number, f: any) => sum + (f.deletions || 0), 0);
       }
+      if (batch.checks) buildStatus = processCheckRuns(batch.checks);
+    } catch (e) {
+      console.warn(`Batch fetch failed for #${prNum}, falling back to individual calls:`, e);
+      const basePath = stripApiBase(
+        `repos/${repoFullName}/pulls/${prNum}`
+      );
+      const [reviewsRes, commentsRes, filesRes, checksRes] = await Promise.all([
+        proxyGitHub(`${basePath}/reviews`).catch(() => []),
+        proxyGitHub(`${basePath}/comments`).catch(() => []),
+        fetchPRFiles(`https://api.github.com/${basePath}`).catch(() => ({ files: [], additions: 0, deletions: 0, changed_files: 0 })),
+        sha ? proxyGitHub(`repos/${repoFullName}/commits/${sha}/check-runs`).catch(() => null) : Promise.resolve(null),
+      ]);
+      reviews = reviewsRes;
+      comments = commentsRes;
+      files = filesRes?.files || [];
+      fileAdditions = filesRes?.additions || 0;
+      fileDeletions = filesRes?.deletions || 0;
+      if (checksRes) buildStatus = processCheckRuns(checksRes);
     }
-  } catch (error) {
-    console.error('Error fetching build status:', error);
   }
 
-  // Fetch files
-  const { files, additions, deletions, changed_files } = await fetchPRFiles(prUrl);
+  console.timeEnd(t);
 
-  return { ...pr, mergeable_state, reviews, comments, buildStatus, files, additions, deletions, changed_files };
+  const complexityBreakdown = computeComplexityBreakdown(files);
+  const effort = computeEffort({ ...pr, reviews, files, body: pr.body });
+
+  // GitHub's list endpoint may omit additions/deletions; fall back to values from files.
+  const additions = pr.additions || fileAdditions || 0;
+  const deletions = pr.deletions || fileDeletions || 0;
+
+  return {
+    ...pr,
+    mergeable_state: pr.mergeable_state || 'unknown',
+    reviews,
+    comments,
+    buildStatus,
+    files,
+    additions,
+    deletions,
+    changed_files: pr.changed_files || files.length,
+    complexity: complexityBreakdown.score,
+    effort,
+    complexityBreakdown,
+  };
 }
 
 export async function fetchCurrentUser(): Promise<string> {

@@ -238,7 +238,7 @@ export function getFileWeight(filename: string): number {
     return 0.1;
   }
 
-  // Config / infra / CI (moderate weight)
+  // Config / infra / CI (low weight)
   if (
     ext === '.yaml' ||
     ext === '.yml' ||
@@ -257,12 +257,12 @@ export function getFileWeight(filename: string): number {
     ext === '.tfvars' ||
     ext === '.hcl'
   ) {
-    return 0.5;
+    return 0.2;
   }
 
-  // JSON — config vs generated. Treat as 0.5 unless it's a lockfile (handled above)
+  // JSON — config vs generated. Treat as 0.2 unless it's a lockfile (handled above)
   if (ext === '.json') {
-    return 0.5;
+    return 0.2;
   }
 
   // CSS / styling files
@@ -270,8 +270,13 @@ export function getFileWeight(filename: string): number {
     return 0.8;
   }
 
-  // Source code or tests
-  if (CODE_EXTS.has(ext) || isTestFile(filename)) {
+  // Test files — low weight
+  if (isTestFile(filename)) {
+    return 0.2;
+  }
+
+  // Source code
+  if (CODE_EXTS.has(ext)) {
     return 1.0;
   }
 
@@ -395,8 +400,9 @@ export function computeComplexityBreakdown(files: PRFile[]): ComplexityBreakdown
   const fileComponent = Math.log(1 + relevantFileCount) * 10;
   const intensityComponent = 5 * intensityFactor;
 
-  const raw = churnComponent + fileComponent + intensityComponent;
-  const score = Math.max(0, Math.min(100, Math.round(raw)));
+  const BASELINE = 12;
+  const raw = churnComponent + fileComponent + intensityComponent - BASELINE;
+  const score = Math.max(1, Math.min(100, Math.round(raw)));
 
   // Sort by contribution and take top 5
   fileContributions.sort((a, b) => b.contribution - a.contribution);
@@ -449,4 +455,47 @@ export function getComplexityLabel(score: number, relevantFiles: number = 0): st
  */
 export function formatSize(additions: number, deletions: number): string {
   return `+${additions} / -${deletions}`;
+}
+
+/**
+ * Calculate estimated review time in minutes for a PR.
+ * Approved PRs return 0 (no effort needed).
+ */
+export function computeEffort(pr: {
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
+  files?: PRFile[];
+  body?: string;
+  reviews?: { state: string }[];
+}): number {
+  const approved = pr.reviews?.some((r) => r.state === 'APPROVED');
+  if (approved) return 0;
+
+  const totalChanges = (pr.additions || 0) + (pr.deletions || 0);
+  const fileCount = pr.changed_files || pr.files?.length || 0;
+  const descLen = pr.body?.length || 0;
+
+  const readingTime = totalChanges / 5;
+  const contextTime = fileCount * 1.5;
+  const descTime = descLen / 1000;
+
+  let complexity = 0;
+  if (pr.files && pr.files.length > 0) {
+    try { complexity = computeComplexity(pr.files); } catch {}
+  }
+  const multiplier = 1 + (complexity / 100);
+
+  return Math.round((readingTime + contextTime + descTime) * multiplier);
+}
+
+/**
+ * Format effort minutes into a human-readable string like "45m" or "2h 15m".
+ */
+export function formatEffort(minutes: number): string {
+  if (minutes <= 0) return '—';
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }

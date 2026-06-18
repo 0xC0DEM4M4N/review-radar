@@ -7,8 +7,10 @@ import Chart from 'chart.js/auto';
 import Layout from '@/components/Layout';
 import LoadingIllustration from '@/components/LoadingIllustration';
 import { useTranslations } from 'next-intl';
+import { useAppStore } from '@/lib/store';
 import GitHubOAuthButton from '@/components/GitHubOAuthButton';
-import { computeComplexity } from '@/lib/complexity';
+import { computeComplexity, formatEffort } from '@/lib/complexity';
+import { checkSession } from '@/lib/apiClient';
 
 const CHART_COLORS = ['#22d3ee', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#10b981', '#f97316'];
 
@@ -29,6 +31,7 @@ type PR = {
   url?: string;
   number?: number;
   draft?: boolean;
+  body?: string;
   labels?: { name: string; color: string }[];
   reviews?: Review[];
   buildStatus?: BuildStatus;
@@ -284,20 +287,23 @@ export default function ReportsPage() {
   const [prs, setPRs] = useState<PR[]>([]);
   const [view, setView] = useState<'grid' | 'noData' | 'noPat' | 'noRepos' | 'initial'>('initial');
   const [subtitle, setSubtitle] = useState('');
+  const [watchdogThreshold, setWatchdogThreshold] = useState(4);
 
   const params = useParams();
   const locale = (params?.locale as string) || 'en';
   const t = useTranslations('reports');
   const tc = useTranslations('common');
+  const currentUser = useAppStore((s) => s.currentUser);
 
   const chartStatusRef = useRef<HTMLCanvasElement | null>(null);
   const chartStatusInstance = useRef<Chart | null>(null);
 
   // Configure Chart.js theme
   useEffect(() => {
+    const dataTheme = document.documentElement.getAttribute('data-theme');
     const savedTheme = localStorage.getItem('reviewradar-theme');
     const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-    const theme = savedTheme || (prefersLight ? 'light' : 'dark');
+    const theme = dataTheme || savedTheme || (prefersLight ? 'light' : 'dark');
     if (theme === 'light') {
       Chart.defaults.color = 'rgba(0,0,0,0.5)';
       Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
@@ -457,9 +463,106 @@ export default function ReportsPage() {
     return { entries, total };
   }, []);
 
+  const renderWatchdogData = useCallback((data: PR[], thresholdHours: number, currentUser: string | null) => {
+    const now = Date.now();
+    return data
+      .filter((pr) => {
+        if (pr.draft) return false;
+        if (currentUser && (pr.user?.login || '') === currentUser) return false;
+        return !pr.reviews || pr.reviews.length === 0;
+      })
+      .map((pr) => {
+        const created = new Date(pr.created_at).getTime();
+        const hoursWaiting = Math.round(((now - created) / (1000 * 60 * 60)) * 10) / 10;
+        return { pr, hoursWaiting };
+      })
+      .filter((item) => !isNaN(item.hoursWaiting) && item.hoursWaiting >= thresholdHours)
+      .sort((a, b) => b.hoursWaiting - a.hoursWaiting)
+      .slice(0, 20);
+  }, []);
+
+  const renderVelocityData = useCallback((data: PR[]) => {
+    const reviewerTimes: Record<string, { total: number; count: number }> = {};
+    data.forEach((pr) => {
+      const created = new Date(pr.created_at).getTime();
+      (pr.reviews || []).forEach((r) => {
+        if (r.user?.login && r.submitted_at) {
+          const reviewTime = new Date(r.submitted_at).getTime();
+          const diffHours = (reviewTime - created) / (1000 * 60 * 60);
+          if (diffHours >= 0) {
+            if (!reviewerTimes[r.user.login]) reviewerTimes[r.user.login] = { total: 0, count: 0 };
+            reviewerTimes[r.user.login].total += diffHours;
+            reviewerTimes[r.user.login].count++;
+          }
+        }
+      });
+    });
+    return Object.entries(reviewerTimes)
+      .map(([login, { total, count }]) => ({ login, avgHours: count > 0 ? Math.round((total / count) * 10) / 10 : 0, count }))
+      .sort((a, b) => a.avgHours - b.avgHours);
+  }, []);
+
+  const computeRawEffort = useCallback((pr: PR) => {
+    const totalChanges = (pr.additions || 0) + (pr.deletions || 0);
+    const fileCount = pr.changed_files || pr.files?.length || 0;
+    const descLen = pr.body?.length || 0;
+    const readingTime = totalChanges / 5;
+    const contextTime = fileCount * 1.5;
+    const descTime = descLen / 1000;
+    let complexity = 0;
+    if (pr.files && pr.files.length > 0) {
+      try { complexity = computeComplexity(pr.files); } catch {}
+    }
+    const multiplier = 1 + (complexity / 100);
+    return Math.round((readingTime + contextTime + descTime) * multiplier);
+  }, []);
+
+  const renderBurnoutData = useCallback((data: PR[]) => {
+    const allReviewers = new Set<string>();
+    const approvedBy: Record<string, Set<number>> = {};
+    const prApprovalCount: Record<number, number> = {};
+    data.forEach((pr) => {
+      if (pr.draft) return;
+      let approvals = 0;
+      (pr.reviews || []).forEach((r) => {
+        if (r.user?.login) {
+          allReviewers.add(r.user.login);
+          if (r.state === 'APPROVED') {
+            approvals++;
+            if (!approvedBy[r.user.login]) approvedBy[r.user.login] = new Set();
+            approvedBy[r.user.login].add(pr.id);
+          }
+        }
+      });
+      prApprovalCount[pr.id] = approvals;
+    });
+    return Array.from(allReviewers)
+      .map((reviewer) => {
+        let totalEffort = 0;
+        let totalComplexity = 0;
+        let prCount = 0;
+        data.forEach((pr) => {
+          if (pr.draft) return;
+          if (pr.user?.login === reviewer) return;
+          if (prApprovalCount[pr.id] >= 2) return;
+          if (approvedBy[reviewer]?.has(pr.id)) return;
+          const effort = computeRawEffort(pr);
+          totalEffort += effort;
+          let cpx = 0;
+          if (pr.files && pr.files.length > 0) {
+            try { cpx = computeComplexity(pr.files); } catch {}
+          }
+          totalComplexity += cpx;
+          prCount++;
+        });
+        const avgComplexity = prCount > 0 ? Math.round((totalComplexity / prCount) * 10) / 10 : 0;
+        return { reviewer, totalEffort, prCount, avgComplexity };
+      })
+      .filter((r) => r.prCount > 0)
+      .sort((a, b) => b.totalEffort - a.totalEffort);
+  }, []);
+
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setStatus('', false);
     destroyCharts();
 
     const raw = localStorage.getItem('reviewradar-prs');
@@ -470,14 +573,14 @@ export default function ReportsPage() {
       cached = [];
     }
 
-    // If we have cached data and no session, show it immediately
+    // Show cached data immediately (stale-while-revalidate)
+    let hasCached = false;
     if (cached.length > 0) {
       const filteredCached = filterPRsBySelectedRepos(cached);
       if (filteredCached.length > 0) {
         showData(filteredCached);
         setLoading(false);
-        setStatus(t('cachedData'), false);
-        return;
+        hasCached = true;
       } else {
         setView('noRepos');
         setLoading(false);
@@ -489,9 +592,25 @@ export default function ReportsPage() {
       return;
     }
 
-    // Fetch fresh data
+    // First-time visitor with no cache: show loading state
+    if (!hasCached) setLoading(true);
+
+    // Check for active session — if none, show cached or error
+    const session = await checkSession();
+    if (!session) {
+      if (!hasCached) {
+        setView('noData');
+        setLoading(false);
+        setStatus(t('notLoggedIn'), true);
+      }
+      return;
+    }
+
+    // Fetch fresh data (silent background refresh if cache was shown)
     try {
       const fetched = await fetchLivePRs(setStatusMsg, t);
+      setStatus('', false);
+
       if (fetched.length > 0) {
         try {
           const stripped = stripLargeDataForStorage(fetched);
@@ -500,14 +619,17 @@ export default function ReportsPage() {
           console.warn('Storage quota exceeded, using fetched data without caching:', (storageError as Error).message);
         }
         showData(fetched);
-      } else {
+      } else if (!hasCached) {
         setStatus(t('noOpenPRs'), false);
         setView('noData');
       }
+      // If hasCached && fetched is empty: silently keep cached data
     } catch (e) {
       console.error('Load error:', e);
-      setStatus(t('errorLoading', { message: (e as Error).message }), true);
-      setView('noData');
+      if (!hasCached) {
+        setStatus(t('errorLoading', { message: (e as Error).message }), true);
+        setView('noData');
+      }
     }
 
     setLoading(false);
@@ -1278,6 +1400,221 @@ export default function ReportsPage() {
                     })}
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Time-to-First-Review Watchdog */}
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('watchdogTitle')}</h3>
+            <div
+              className="rr-stat"
+              style={{
+                background: 'var(--ink-light)',
+                border: '0.5px solid var(--border-faint)',
+                borderRadius: 12,
+                padding: 20,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div className="rr-stat-label">{t('watchdogDesc')}</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[4, 8, 24].map((h) => (
+                    <button
+                      key={h}
+                      onClick={() => setWatchdogThreshold(h)}
+                      style={{
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: 10,
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        border: `0.5px solid ${watchdogThreshold === h ? 'var(--cyan)' : 'var(--border-faint)'}`,
+                        background: watchdogThreshold === h ? 'rgba(34,211,238,0.15)' : 'transparent',
+                        color: watchdogThreshold === h ? 'var(--cyan)' : 'var(--muted-dim)',
+                        cursor: 'pointer',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      {h === 4 ? t('watchdog4h') : h === 8 ? t('watchdog8h') : t('watchdog24h')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                {(() => {
+                  const watchdogData = renderWatchdogData(prs, watchdogThreshold, currentUser);
+                  if (watchdogData.length === 0) {
+                    return (
+                      <p style={{ textAlign: 'center', padding: '40px', fontSize: 12, color: 'var(--muted-dim)' }}>
+                        {t('watchdogNoData')}
+                      </p>
+                    );
+                  }
+                  return (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', minWidth: 500, borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '0.5px solid var(--border-faint)' }}>
+                            <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'left' }}>{t('watchdogPR')}</th>
+                            <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'left' }}>{t('watchdogAuthor')}</th>
+                            <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'right' }}>{t('watchdogWaiting')}</th>
+                            <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'right' }}>{t('watchdogComplexity')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {watchdogData.map(({ pr, hoursWaiting }) => {
+                            const waitColor = hoursWaiting > 24 ? 'var(--red)' : hoursWaiting > 8 ? 'var(--amber)' : hoursWaiting > 4 ? '#f97316' : 'var(--green)';
+                            return (
+                              <tr key={pr.id} style={{ borderBottom: '0.5px solid rgba(255,255,255,0.03)' }}>
+                                <td style={{ padding: '8px 12px' }}>
+                                  <a href={pr.html_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-primary)', textDecoration: 'none', fontSize: 12 }}>
+                                    {pr.title?.substring(0, 60) || tc('untitledPR')}
+                                  </a>
+                                </td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted-dim)' }}>
+                                  {pr.user?.login || tc('unknown')}
+                                </td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: waitColor, textAlign: 'right', fontWeight: 600 }}>
+                                  {hoursWaiting < 24 ? `${hoursWaiting}h` : `${(hoursWaiting / 24).toFixed(1)}d`}
+                                </td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, textAlign: 'right' }}>
+                                  <span style={{ color: pr.draft ? 'var(--muted-dim)' : computeComplexity(pr.files || []) > 70 ? 'var(--red)' : computeComplexity(pr.files || []) > 40 ? 'var(--amber)' : 'var(--green)', fontWeight: 600 }}>
+                                    {computeComplexity(pr.files || [])}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Review Velocity Report */}
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('velocityTitle')}</h3>
+            <div
+              className="rr-stat"
+              style={{
+                background: 'var(--ink-light)',
+                border: '0.5px solid var(--border-faint)',
+                borderRadius: 12,
+                padding: 20,
+              }}
+            >
+              <div className="rr-stat-label" style={{ marginBottom: 14 }}>{t('velocityDesc')}</div>
+              <div>
+                {(() => {
+                  const velocityData = renderVelocityData(prs);
+                  if (velocityData.length === 0) {
+                    return (
+                      <p style={{ textAlign: 'center', padding: '40px', fontSize: 12, color: 'var(--muted-dim)' }}>
+                        {t('velocityNoData')}
+                      </p>
+                    );
+                  }
+                  return (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', minWidth: 400, borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '0.5px solid var(--border-faint)' }}>
+                            <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'left' }}>{t('velocityReviewer')}</th>
+                            <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'right' }}>{t('velocityAvgTime')}</th>
+                            <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'right' }}>{t('velocityPRs')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {velocityData.map((entry) => {
+                            const speedColor = entry.avgHours < 4 ? 'var(--green)' : entry.avgHours < 24 ? 'var(--cyan)' : entry.avgHours < 72 ? 'var(--amber)' : 'var(--red)';
+                            return (
+                              <tr key={entry.login} style={{ borderBottom: '0.5px solid rgba(255,255,255,0.03)' }}>
+                                <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-primary)' }}>
+                                  {entry.login}
+                                </td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: speedColor, textAlign: 'right', fontWeight: 600 }}>
+                                  {entry.avgHours < 1 ? `${Math.round(entry.avgHours * 60)}m` : entry.avgHours < 24 ? `${entry.avgHours}h` : `${(entry.avgHours / 24).toFixed(1)}d`}
+                                </td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted-dim)', textAlign: 'right' }}>
+                                  {entry.count}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Burnout Alert — Reviewing Load */}
+            <h3 className="mb-1 font-space-mono text-[10px] font-bold uppercase tracking-wider text-white/40">{t('burnoutTitle')}</h3>
+            <div
+              className="rr-stat"
+              style={{
+                background: 'var(--ink-light)',
+                border: '0.5px solid var(--border-faint)',
+                borderRadius: 12,
+                padding: 20,
+              }}
+            >
+              <div className="rr-stat-label" style={{ marginBottom: 14 }}>{t('burnoutDesc')}</div>
+              <div>
+                {(() => {
+                  const burnoutData = renderBurnoutData(prs);
+                  const totalLoad = burnoutData.reduce((s, e) => s + e.totalEffort, 0);
+                  if (burnoutData.length === 0) {
+                    return (
+                      <p style={{ textAlign: 'center', padding: '40px', fontSize: 12, color: 'var(--muted-dim)' }}>
+                        {t('burnoutNoData')}
+                      </p>
+                    );
+                  }
+                  return (
+                    <>
+                      {burnoutData.length > 1 && (
+                        <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--cyan)', marginBottom: 12, textAlign: 'center', padding: '8px 12px', background: 'rgba(0,217,255,0.05)', borderRadius: 6, border: '0.5px solid rgba(0,217,255,0.15)' }}>
+                          {t('burnoutTotalLoad', { load: formatEffort(totalLoad), count: burnoutData.length })}
+                        </div>
+                      )}
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', minWidth: 450, borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '0.5px solid var(--border-faint)' }}>
+                              <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'left' }}>{t('burnoutReviewer')}</th>
+                              <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'right' }}>{t('burnoutPRs')}</th>
+                              <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'right' }}>{t('burnoutPending')}</th>
+                              <th style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', padding: '8px 12px', textAlign: 'right' }}>{t('burnoutAvgComplexity')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {burnoutData.map((entry) => {
+                              const loadColor = entry.totalEffort >= 120 ? 'var(--red)' : entry.totalEffort >= 60 ? 'var(--amber)' : 'var(--green)';
+                              return (
+                                <tr key={entry.reviewer} style={{ borderBottom: '0.5px solid rgba(255,255,255,0.03)' }}>
+                                  <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-primary)' }}>
+                                    {entry.reviewer}
+                                  </td>
+                                  <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted-dim)', textAlign: 'right' }}>
+                                    {entry.prCount}
+                                  </td>
+                                  <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: loadColor, textAlign: 'right', fontWeight: 600 }}>
+                                    {formatEffort(entry.totalEffort)}
+                                  </td>
+                                  <td style={{ padding: '8px 12px', fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted-dim)', textAlign: 'right' }}>
+                                    {entry.avgComplexity}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

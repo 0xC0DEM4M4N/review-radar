@@ -41,14 +41,15 @@ export default function Sidebar() {
     },
   ];
 
-  const pathnameWithoutLocale = pathname?.replace(/^\/(en|fr)(?=\/|$)/, '') || '/';
+  const localeRegex = new RegExp(`^/${locale}(?=/|$)`);
+  const pathnameWithoutLocale = pathname?.replace(localeRegex, '') || '/';
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside className="rr-sidebar">
         {navItems.map((item) => {
-          const itemPath = item.href.replace(/^\/(en|fr)/, '');
+          const itemPath = item.href.replace(localeRegex, '');
           const isActive = pathnameWithoutLocale === itemPath || pathnameWithoutLocale?.startsWith(itemPath + '/');
           return (
             <Link
@@ -67,7 +68,7 @@ export default function Sidebar() {
       {/* Mobile bottom nav */}
       <nav className="rr-mobile-nav">
         {navItems.map((item) => {
-          const itemPath = item.href.replace(/^\/(en|fr)/, '');
+          const itemPath = item.href.replace(localeRegex, '');
           const isActive = pathnameWithoutLocale === itemPath || pathnameWithoutLocale?.startsWith(itemPath + '/');
           return (
             <Link

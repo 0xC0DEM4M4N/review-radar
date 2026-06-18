@@ -1,5 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 import { decrypt } from '../../lib/crypto';
+import { parseCookies } from '../../lib/cookie';
+import { checkRateLimit } from '../../lib/rateLimit';
 
 const COOKIE_NAME = 'rr_session';
 
@@ -14,58 +16,23 @@ const ALLOWED_PATHS = [
   /^user$/,
 ];
 
-const RATE_LIMIT = 1000; // requests per window
-const RATE_WINDOW_MS = 60 * 1000; // 1 minute
-
-interface RateRecord {
-  count: number;
-  resetAt: number;
-}
-
-const ipTracker = new Map<string, RateRecord>();
-
-function getClientIP(request: Request): string {
-  return request.headers.get('CF-Connecting-IP') || 'unknown';
-}
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = ipTracker.get(ip);
-
-  if (!record || now > record.resetAt) {
-    ipTracker.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return true;
-  }
-
-  if (record.count >= RATE_LIMIT) {
-    return false;
-  }
-
-  record.count++;
-  return true;
-}
-
-function parseCookies(header: string | null): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  if (!header) return cookies;
-  header.split(';').forEach((cookie) => {
-    const [name, ...rest] = cookie.trim().split('=');
-    if (name) cookies[name] = rest.join('=');
-  });
-  return cookies;
-}
-
 function isPathAllowed(path: string): boolean {
   const clean = path.split('?')[0];
   return ALLOWED_PATHS.some((re) => re.test(clean));
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const clientIP = getClientIP(context.request);
-  if (!checkRateLimit(clientIP)) {
+  const rateLimit = await checkRateLimit(context.request, 'github-proxy', {
+    limit: 1000,
+    windowMs: 60 * 1000,
+  });
+  if (!rateLimit.allowed) {
     return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
       status: 429,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...rateLimit.headers,
+      },
     });
   }
 
@@ -110,15 +77,24 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const githubUrl = `https://api.github.com/${path}${query}`;
   const isOAuthToken = pat.startsWith('gho_') || pat.startsWith('ghu_');
 
+  // Forward conditional request headers so we can return 304s for unchanged data.
+  const requestHeaders: Record<string, string> = {
+    Authorization: `token ${pat}`,
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'ReviewRadar',
+  };
+  const clientIfNoneMatch = context.request.headers.get('If-None-Match');
+  if (clientIfNoneMatch) requestHeaders['If-None-Match'] = clientIfNoneMatch;
+
   try {
     const githubRes = await fetch(githubUrl, {
       method: 'GET',
-      headers: {
-        Authorization: `token ${pat}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'ReviewRadar',
-      },
+      headers: requestHeaders,
     });
+
+    if (githubRes.status === 304) {
+      return new Response(null, { status: 304 });
+    }
 
     const body = await githubRes.text();
 
@@ -138,12 +114,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       );
     }
 
+    const responseHeaders: Record<string, string> = {
+      'Content-Type': githubRes.headers.get('Content-Type') || 'application/json',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+    };
+    const etag = githubRes.headers.get('ETag');
+    if (etag) responseHeaders['ETag'] = etag;
+
     return new Response(body, {
       status: githubRes.status,
-      headers: {
-        'Content-Type': githubRes.headers.get('Content-Type') || 'application/json',
-        'X-Content-Type-Options': 'nosniff',
-      },
+      headers: responseHeaders,
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: 'GitHub request failed' }), {

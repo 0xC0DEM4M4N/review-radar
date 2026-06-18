@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export const SUPPORTED_LOCALES = ['en', 'fr'];
+export const SUPPORTED_LOCALES = ['en', 'fr', 'pl', 'vi'];
 export const DEFAULT_LOCALE = 'en';
 
 function getBrowserLocale() {

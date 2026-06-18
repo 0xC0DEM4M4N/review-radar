@@ -1,15 +1,29 @@
 /**
- * Simple AES-GCM encrypt/decrypt using a secret key.
- * Key is derived from SESSION_SECRET via SHA-256.
+ * AES-GCM encrypt/decrypt using a key derived from SESSION_SECRET via HKDF-SHA256.
+ * NOTE: Changing the salt/info will invalidate existing sessions.
  */
 
 const ALGO = 'AES-GCM';
 const IV_LEN = 12;
+const HKDF_SALT = new TextEncoder().encode('ReviewRadarSessionSalt-v1');
+const HKDF_INFO = new TextEncoder().encode('ReviewRadarSessionKey-v1');
 
 async function getKey(secret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const keyData = await crypto.subtle.digest('SHA-256', encoder.encode(secret));
-  return crypto.subtle.importKey('raw', keyData, ALGO, false, ['encrypt', 'decrypt']);
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HKDF' },
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', salt: HKDF_SALT, info: HKDF_INFO, hash: 'SHA-256' },
+    keyMaterial,
+    { name: ALGO, length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

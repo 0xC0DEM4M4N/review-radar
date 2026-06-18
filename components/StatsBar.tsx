@@ -28,13 +28,12 @@ function computeStats(prs: any[], currentUser: string | null) {
     const isNotByMe = (pr.user?.login || '') !== currentUser;
     const isNotDraft = !pr.draft;
     const hasNotReviewedByMe = !pr.reviews?.some((r: any) => r.user?.login === currentUser);
-    const hasNoApprovals = !pr.reviews?.some((r: any) => r.state === 'APPROVED');
-    return isNotByMe && isNotDraft && hasNotReviewedByMe && hasNoApprovals;
+    const hasFewerThanTwoApprovals = getConsolidatedApprovalCount(pr) < 2;
+    return isNotByMe && isNotDraft && hasNotReviewedByMe && hasFewerThanTwoApprovals;
   }).length;
   const blocked = prs.filter((pr) =>
     pr.buildStatus?.state === 'failure' ||
-    pr.mergeable_state === 'dirty' ||
-    pr.reviews?.some((r: any) => r.state === 'CHANGES_REQUESTED')
+    pr.mergeable_state === 'dirty'
   ).length;
   return { total: prs.length, mine, approved, needsAttention, blocked };
 }
@@ -62,6 +61,12 @@ export default function StatsBar() {
     });
   }, [allPRs, selectedRepos]);
 
+  const allUserLogins = useMemo(() => {
+    const set = new Set<string>();
+    visiblePRs.forEach((pr) => { if (pr.user?.login) set.add(pr.user.login); });
+    return set;
+  }, [visiblePRs]);
+
   const filteredVisiblePRs = useMemo(() => {
     let prs = visiblePRs;
 
@@ -85,6 +90,8 @@ export default function StatsBar() {
 
     if (selectedUsers.length > 0) {
       prs = prs.filter((pr) => selectedUsers.includes(pr.user?.login || ''));
+    } else {
+      prs = [];
     }
 
     if (searchQuery.trim()) {
@@ -104,18 +111,18 @@ export default function StatsBar() {
 
   const hasActiveFilter =
     searchQuery.trim().length > 0 ||
-    selectedUsers.length > 0 ||
+    selectedUsers.length < allUserLogins.size ||
     activeFilters.label !== null ||
     activeFilters.status !== null ||
     activeFilters.author !== null ||
     activeFilters.build !== null;
 
   const cards = [
-    { label: t('totalPRs'), total: baseStats.total, filtered: filteredStats.total, color: 'var(--cyan)', filter: 'all' },
-    { label: t('mine'), total: baseStats.mine, filtered: filteredStats.mine, color: 'var(--cyan)', filter: 'owned' },
-    { label: t('needsAttention'), total: baseStats.needsAttention, filtered: filteredStats.needsAttention, color: 'var(--amber)', filter: 'needs-attention' },
-    { label: t('approved'), total: baseStats.approved, filtered: filteredStats.approved, color: 'var(--green)', filter: 'approved' },
-    { label: t('blocked'), total: baseStats.blocked, filtered: filteredStats.blocked, color: 'var(--red)', filter: 'blocked' },
+    { label: t('totalPRs'), subtitle: t('totalPRsSub'), total: baseStats.total, filtered: filteredStats.total, color: 'var(--cyan)', filter: 'all' },
+    { label: t('mine'), subtitle: t('mineSub'), total: baseStats.mine, filtered: filteredStats.mine, color: 'var(--cyan)', filter: 'owned' },
+    { label: t('needsAttention'), subtitle: t('needsAttentionSub'), total: baseStats.needsAttention, filtered: filteredStats.needsAttention, color: 'var(--amber)', filter: 'needs-attention' },
+    { label: t('approved'), subtitle: t('approvedSub'), total: baseStats.approved, filtered: filteredStats.approved, color: 'var(--green)', filter: 'approved' },
+    { label: t('blocked'), subtitle: t('blockedSub'), total: baseStats.blocked, filtered: filteredStats.blocked, color: 'var(--red)', filter: 'blocked' },
   ];
 
   return (
@@ -140,6 +147,7 @@ export default function StatsBar() {
               card.total
             )}
           </div>
+          <div className="rr-stat-sub">{card.subtitle}</div>
         </div>
       ))}
     </div>

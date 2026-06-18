@@ -2,7 +2,7 @@
 
 A client-side GitHub PR dashboard that gives you a live sweep of every open pull request across your repos — who's blocked, what needs attention, and what's ready to ship.
 
-No backend. No accounts. Just your GitHub PAT and a browser tab.
+A lightweight Cloudflare Pages Functions backend handles GitHub API proxying and optional OAuth sign-in. Your token is stored in an encrypted `HttpOnly` cookie.
 
 ---
 
@@ -12,7 +12,7 @@ No backend. No accounts. Just your GitHub PAT and a browser tab.
 - **PR-aware filtering** — Filter by all, mine, needs attention, approved, changes requested, pending, or conflicts. Click any label or status badge to filter instantly.
 - **Diff at a glance** — Review status, build state, mentions, labels, merge conflicts, and last updated — all visible without leaving the dashboard.
 - **Size & Complexity scoring** — See the real footprint and calculated complexity of every PR (see below).
-- **Zero backend** — Runs entirely in your browser. Your token stays in `localStorage` only.
+- **Privacy-first auth** — Use a GitHub PAT or OAuth. Tokens are encrypted and stored in `HttpOnly` cookies, never in `localStorage`.
 - **Multi-repo support** — Sweep across as many repositories as you have access to.
 
 ---

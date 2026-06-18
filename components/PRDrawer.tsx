@@ -5,7 +5,7 @@ import { PR } from '@/lib/store';
 import { computeComplexityBreakdown } from '@/lib/complexity';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 
 function stripMediaFromHtml(html: string, mediaNotAvailable: string) {
   const div = document.createElement('div');
@@ -30,6 +30,7 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
   const [commentsHtml, setCommentsHtml] = useState('');
   const t = useTranslations('components.prdrawer');
   const tc = useTranslations('common');
+  const locale = useLocale();
 
   useEffect(() => {
     if (!pr) return;
@@ -67,7 +68,7 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
 
     const html = allComments.map((c) => {
       const date = new Date(c.date);
-      const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const dateStr = date.toLocaleDateString(locale) + ' ' + date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
       const badge = c.type === 'review' ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:4px;background:var(--green);color:var(--ink-light);font-size:10px;font-weight:bold;">${c.state}</span>` : '';
       const rawBodyHtml = marked.parse(c.body || '') as string;
       const cleanBodyHtml = DOMPurify.sanitize(rawBodyHtml, { USE_PROFILES: { html: true } });
@@ -86,7 +87,7 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
     setCommentsHtml(html || `<p style="color:var(--muted-dim);font-style:italic;">${tc('noCommentsYet')}</p>`);
   }, [pr, t, tc]);
 
-  const breakdown = pr?.files ? computeComplexityBreakdown(pr.files) : null;
+  const breakdown = pr?.complexityBreakdown || (pr?.files ? computeComplexityBreakdown(pr.files) : null);
 
   if (!pr) return null;
 

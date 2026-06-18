@@ -3,12 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 
-const SUPPORTED_LOCALES = ['en', 'fr'];
+const SUPPORTED_LOCALES = ['en', 'fr', 'pl', 'vi'];
 const DEFAULT_LOCALE = 'en';
 
 const LOCALE_META: Record<string, { flag: string; label: string }> = {
   en: { flag: '🇬🇧', label: 'English' },
   fr: { flag: '🇫🇷', label: 'Français' },
+  pl: { flag: '🇵🇱', label: 'Polski' },
+  vi: { flag: '🇻🇳', label: 'Tiếng Việt' },
 };
 
 function getBrowserLocale() {
@@ -42,7 +44,7 @@ export default function LanguageSwitcher() {
       }
       setLocalePreference(locale);
       // Replace locale in pathname: /en/dashboard → /fr/dashboard
-      const newPath = pathname.replace(/^\/(en|fr)(?=\/|$)/, `/${locale}`);
+      const newPath = pathname.replace(/^\/(en|fr|pl|vi)(?=\/|$)/, `/${locale}`);
       router.push(newPath);
       setOpen(false);
     },

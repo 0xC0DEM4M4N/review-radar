@@ -73,13 +73,14 @@ function getWeekStart(dateStr: string): string {
   return formatDate(monday);
 }
 
-function formatEta(ms: number): string {
+function formatEta(ms: number, locale = 'en'): string {
   const seconds = Math.ceil(ms / 1000);
+  const nf = new Intl.NumberFormat(locale);
   if (seconds < 1) return '<1s';
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return nf.format(seconds) + 's';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+  return nf.format(mins) + 'm ' + nf.format(secs).padStart(2, '0') + 's';
 }
 
 function formatDate(d: Date): string {
@@ -231,9 +232,10 @@ export default function HistoricalDataPage() {
     setDateTo(formatDate(lastDay));
     setSubtitle(t('defaultSubtitle'));
 
+    const dataTheme = document.documentElement.getAttribute('data-theme');
     const savedTheme = localStorage.getItem('reviewradar-theme');
     const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-    const theme = savedTheme || (prefersLight ? 'light' : 'dark');
+    const theme = dataTheme || savedTheme || (prefersLight ? 'light' : 'dark');
     if (theme === 'light') {
       Chart.defaults.color = 'rgba(0,0,0,0.5)';
       Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
@@ -320,7 +322,7 @@ export default function HistoricalDataPage() {
       const elapsed = Date.now() - loadStart;
       const totalEst = elapsed / (pct / 100);
       const remaining = Math.max(0, totalEst - elapsed);
-      setEtaText(formatEta(remaining));
+      setEtaText(formatEta(remaining, locale));
     };
 
     try {
@@ -1324,11 +1326,11 @@ export default function HistoricalDataPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
             <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('avgTimeToReview')}</div>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--cyan)' }}>{reviewHealth.avgTimeToReview}<span style={{ fontSize: '12px', color: 'var(--muted)' }}>d</span></div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--cyan)' }}>{reviewHealth.avgTimeToReview}<span style={{ fontSize: '12px', color: 'var(--muted)' }}>{tc('daysUnit')}</span></div>
             </div>
             <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('avgTimeToMerge')}</div>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--green)' }}>{reviewHealth.avgTimeToMerge}<span style={{ fontSize: '12px', color: 'var(--muted)' }}>d</span></div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '24px', fontWeight: 700, color: 'var(--green)' }}>{reviewHealth.avgTimeToMerge}<span style={{ fontSize: '12px', color: 'var(--muted)' }}>{tc('daysUnit')}</span></div>
             </div>
             <div className="rr-stat" style={{ background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
               <div style={{ fontFamily: "'Space Mono',monospace", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>{t('pctReviewed')}</div>

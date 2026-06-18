@@ -4,6 +4,14 @@ import { parseCookies, serializeCookie } from '../../lib/cookie';
 
 const COOKIE_NAME = 'rr_session';
 
+// Defense-in-depth: re-validate the stored return URL before redirecting.
+function validateReturnTo(value: string | undefined): string {
+  if (!value) return '/';
+  if (!value.startsWith('/') || value.startsWith('//')) return '/';
+  if (/[\r\n]/.test(value)) return '/';
+  return value;
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const secret = context.env.SESSION_SECRET;
   const clientId = context.env.GITHUB_CLIENT_ID;
@@ -45,6 +53,14 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     });
   }
 
+  const codeVerifier = cookies['auth_verifier'];
+  if (!codeVerifier) {
+    return new Response(JSON.stringify({ error: 'Missing PKCE verifier' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   // Exchange code for token
   let accessToken: string;
   try {
@@ -58,6 +74,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         client_id: clientId,
         client_secret: clientSecret,
         code,
+        code_verifier: codeVerifier,
       }),
     });
 
@@ -92,7 +109,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     secure: true,
     sameSite: 'Strict',
     path: '/',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 
   const clearState = serializeCookie('auth_state', '', {
@@ -111,12 +128,21 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     maxAge: 0,
   });
 
-  const returnTo = cookies['auth_return'] || '/';
+  const clearVerifier = serializeCookie('auth_verifier', '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Strict',
+    path: '/',
+    maxAge: 0,
+  });
+
+  const returnTo = validateReturnTo(cookies['auth_return']);
 
   const headers = new Headers();
   headers.set('Location', returnTo);
   headers.append('Set-Cookie', sessionCookie);
   headers.append('Set-Cookie', clearState);
+  headers.append('Set-Cookie', clearVerifier);
   headers.append('Set-Cookie', clearReturn);
 
   return new Response(null, { status: 302, headers });
