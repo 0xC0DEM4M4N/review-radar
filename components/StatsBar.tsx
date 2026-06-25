@@ -135,19 +135,21 @@ export default function StatsBar() {
           className={`rr-stat ${currentFilter === card.filter ? 'active' : ''}`}
         >
           <div className="rr-stat-label">{card.label}</div>
-          <div className="rr-stat-val" style={{ color: card.color }}>
-            {hasActiveFilter ? (
-              <span>
-                {card.filtered}
-                <span style={{ color: 'var(--muted-dim)', fontSize: 14, marginLeft: 4, fontWeight: 500 }}>
-                  / {card.total}
+          <div className="rr-stat-val-row">
+            <div className="rr-stat-val" style={{ color: card.color }}>
+              {hasActiveFilter ? (
+                <span>
+                  {card.filtered}
+                  <span style={{ color: 'var(--muted-dim)', fontSize: 14, marginLeft: 4, fontWeight: 500 }}>
+                    / {card.total}
+                  </span>
                 </span>
-              </span>
-            ) : (
-              card.total
-            )}
+              ) : (
+                card.total
+              )}
+            </div>
+            <div className="rr-stat-sub">{card.subtitle}</div>
           </div>
-          <div className="rr-stat-sub">{card.subtitle}</div>
         </div>
       ))}
     </div>

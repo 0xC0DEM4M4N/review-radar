@@ -1,5 +1,8 @@
 const API_BASE = '';
 
+export let requestCount = 0;
+export function resetRequestCount() { requestCount = 0; }
+
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
 
@@ -74,6 +77,7 @@ export async function clearSession(): Promise<void> {
 }
 
 export async function proxyGitHub(path: string): Promise<any> {
+  requestCount++;
   const res = await fetchWithRetry(`${API_BASE}/api/github/${path}`, {
     method: 'GET',
     credentials: 'include',
@@ -82,7 +86,7 @@ export async function proxyGitHub(path: string): Promise<any> {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) throw new Error('Unauthorized — please log in with GitHub or set a PAT in Settings.');
-    throw new Error(data.error || `GitHub proxy error: ${res.status}`);
+    throw new Error(data.error || `GitHub proxy error ${res.status} for: ${path}`);
   }
   return res.json();
 }

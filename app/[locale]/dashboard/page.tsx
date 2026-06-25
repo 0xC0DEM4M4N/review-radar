@@ -11,6 +11,7 @@ import Layout from '@/components/Layout';
 import GitHubOAuthButton from '@/components/GitHubOAuthButton';
 import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
+import { checkSession } from '@/lib/apiClient';
 
 export default function DashboardPage() {
   const store = useAppStore();
@@ -50,6 +51,8 @@ export default function DashboardPage() {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [userSearch, setUserSearch] = useState('');
+  const [apiCalls, setApiCalls] = useState(0);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   // Restore cached PRs on mount so filters (users) are available immediately
   useEffect(() => {
@@ -73,6 +76,18 @@ export default function DashboardPage() {
     } catch {
       // ignore parse errors
     }
+  }, []);
+
+  // Check session on mount to show user immediately without waiting for the worker
+  useEffect(() => {
+    checkSession().then((session) => {
+      if (session.active && session.user) {
+        setCurrentUser(session.user);
+      }
+      setSessionChecked(true);
+    }).catch(() => {
+      setSessionChecked(true);
+    });
   }, []);
 
   // Migrate column order to include any new default columns
@@ -138,6 +153,7 @@ export default function DashboardPage() {
   }, []);
 
   const loadPRs = useCallback(({ silent = false }: { silent?: boolean } = {}) => {
+    if (!currentUser) return;
     if (!silent) setLoading(true);
 
     const repos = Array.from(selectedRepos);
@@ -152,8 +168,9 @@ export default function DashboardPage() {
       onProgress: (phase, current, total) => {
         setProgress({ phase, current, total });
       },
-      onResult: (prs, errors, user, complete) => {
+      onResult: (prs, errors, user, complete, apiCalls) => {
         setCurrentUser(user);
+        if (apiCalls !== undefined) setApiCalls(apiCalls);
 
         // On silent background refresh, don't overwrite good cached data with empty results
         if (silent && prs.length === 0) {
@@ -171,10 +188,11 @@ export default function DashboardPage() {
           }
         }
 
-        // Only update table when all data is loaded (no intermediate flicker)
+        // Show PRs immediately for user-initiated loads so mobile users see data without delay
+        if (!silent) setAllPRs(prs);
+
         if (complete) {
           setProgress(null);
-          setAllPRs(prs);
 
           const elapsed = Date.now() - t0;
           const elapsedStr = elapsed < 60000
@@ -270,7 +288,7 @@ export default function DashboardPage() {
         if (!silent) setLoading(false);
       },
     });
-  }, [selectedRepos, setAllPRs, setCurrentUser, setLastLoadedRepos, showMsg, t, tc, loadPRsInWorker]);
+  }, [selectedRepos, setAllPRs, setCurrentUser, setLastLoadedRepos, showMsg, t, tc, loadPRsInWorker, currentUser]);
 
   const setupAutoRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -290,9 +308,11 @@ export default function DashboardPage() {
     }, intervalMs);
   }, [selectedRepos.size, loadPRs]);
 
-  // Auto-load PRs when selected repos change
+  // Auto-load PRs when selected repos change (only if authenticated)
   useEffect(() => {
     if (selectedRepos.size === 0) return;
+    if (!sessionChecked) return;
+    if (!currentUser) return;
 
     // On very first load, use cached data silently; on repo changes, show loading
     const isFirstLoad = !hasAutoLoaded.current;
@@ -310,7 +330,7 @@ export default function DashboardPage() {
     }
 
     loadPRs({ silent: isFirstLoad && hasCachedData });
-  }, [selectedRepos, loadPRs]);
+  }, [selectedRepos, loadPRs, sessionChecked, currentUser]);
 
   // Auto-refresh timer
   useEffect(() => {
@@ -398,9 +418,47 @@ export default function DashboardPage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto">
+        {/* Diagnostic status bar */}
+        <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 11, fontFamily: "'Space Mono', monospace", color: 'var(--muted)' }}>
+          <span>PRs: <strong style={{ color: 'var(--text-primary)' }}>{allPRs.length}</strong></span>
+          <span>User: <strong style={{ color: currentUser ? 'var(--green)' : 'var(--red)' }}>{currentUser || 'none'}</strong></span>
+          <span>Repos: <strong style={{ color: 'var(--text-primary)' }}>{selectedRepos.size}</strong></span>
+          <span>API: <strong style={{ color: 'var(--text-primary)' }}>{apiCalls}</strong></span>
+          {message?.type === 'error' && (
+            <span style={{ color: 'var(--red)' }}>Error: {message.text.slice(0, 60)}</span>
+          )}
+        </div>
+        {sessionChecked && !currentUser && (
+          <div
+            style={{
+              background: 'var(--color-background-warning, #fff3cd)',
+              border: '0.5px solid var(--color-border-warning, #ffc107)',
+              borderRadius: 8,
+              padding: '12px 16px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              fontSize: 13,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: '#856404' }}>
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span style={{ color: '#856404', flex: 1 }}>
+              Not signed in — set a <strong>PAT</strong> in{' '}
+              <Link href={`/${locale}/settings`} style={{ textDecoration: 'underline', color: '#856404', fontWeight: 600 }}>Settings</Link>
+              {' '}or sign in with GitHub to load PRs. Unauthenticated requests fail and waste your API quota.
+            </span>
+            <GitHubOAuthButton label="Log in with GitHub" className="text-xs py-1.5 px-3" />
+          </div>
+        )}
         {/* ── SECTION 1: HEADER TOP ── */}
         <div className="rr-header-row">
-          <div className="flex items-center gap-3">
+          <div className="rr-header-title-group flex items-center gap-3">
             <div className="rr-radar-bg">
               <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
                 <circle cx="20" cy="20" r="18" stroke="var(--cyan)" strokeWidth="0.5" opacity="0.3" />
@@ -456,9 +514,10 @@ export default function DashboardPage() {
           )}
           <button
             onClick={() => loadPRs({ silent: false })}
-            disabled={loading}
+            disabled={loading || !currentUser}
             className="rr-btn-primary"
-            style={{ marginLeft: 'auto', borderRadius: 6 }}
+            style={{ marginLeft: 'auto', borderRadius: 6, opacity: !currentUser ? 0.5 : 1, cursor: !currentUser ? 'not-allowed' : 'pointer' }}
+            title={!currentUser ? 'Sign in to load PRs' : undefined}
           >
             {loading ? (
               <>
@@ -502,9 +561,9 @@ export default function DashboardPage() {
         <div style={{ height: 1, background: 'var(--border-faint)', marginBottom: 16 }} />
 
         {/* ── SECTION 2: SEARCH & FILTERS ── */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24 }}>
+        <div className="rr-search-filter-row" style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24 }}>
           {/* Search Input Wrapper */}
-          <div style={{
+          <div className="rr-search-input-wrap" style={{
             flex: 1, display: 'flex', alignItems: 'center', height: 36,
             background: 'var(--surface)', borderRadius: 8, padding: '0 12px',
           }}>
@@ -556,7 +615,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Users Dropdown */}
-          <div style={{ position: 'relative', flexShrink: 0 }} ref={userDropdownRef}>
+          <div className="rr-filter-wrapper" style={{ position: 'relative', flexShrink: 0 }} ref={userDropdownRef}>
             <button
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
               style={{
@@ -580,6 +639,7 @@ export default function DashboardPage() {
             </button>
             {userDropdownOpen && (
               <div
+                className="rr-filter-dropdown"
                 style={{
                   position: 'absolute', top: '100%', left: 0, marginTop: 4, minWidth: 245,
                   background: 'var(--surface)', border: '0.5px solid var(--border-faint)',
@@ -638,7 +698,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Repos Dropdown */}
-          <div style={{ position: 'relative', flexShrink: 0 }} ref={dropdownRef}>
+          <div className="rr-filter-wrapper" style={{ position: 'relative', flexShrink: 0 }} ref={dropdownRef}>
             <button
               onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
               style={{
@@ -662,6 +722,7 @@ export default function DashboardPage() {
             </button>
             {repoDropdownOpen && (
               <div
+                className="rr-filter-dropdown"
                 style={{
                   position: 'absolute', top: '100%', left: 0, marginTop: 4, minWidth: 245,
                   background: 'var(--surface)', border: '0.5px solid var(--border-faint)',
@@ -750,8 +811,125 @@ export default function DashboardPage() {
             )}
           </div>
         )}
+
+        {/* Debug panel */}
+        <DebugPanel
+          loading={loading}
+          message={message}
+          lastRefreshAt={lastRefreshAt}
+          allPRs={allPRs}
+          currentUser={currentUser}
+          selectedReposSize={selectedRepos.size}
+          apiCalls={apiCalls}
+        />
       </div>
 
     </Layout>
+  );
+}
+
+function DebugPanel({ loading, message, lastRefreshAt, allPRs, currentUser, selectedReposSize, apiCalls }: {
+  loading: boolean;
+  message: { type: string; text: string } | null;
+  lastRefreshAt: number | null;
+  allPRs: any[];
+  currentUser: string | null;
+  selectedReposSize: number;
+  apiCalls: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [netInfo, setNetInfo] = useState({ online: true, type: 'unknown' });
+
+  useEffect(() => {
+    setNetInfo({
+      online: navigator.onLine,
+      type: (navigator as any).connection?.effectiveType || 'unknown',
+    });
+    const onOnline = () => setNetInfo(p => ({ ...p, online: true }));
+    const onOffline = () => setNetInfo(p => ({ ...p, online: false }));
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  return (
+    <div style={{ position: 'fixed', bottom: 80, right: 16, zIndex: 99999 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          background: 'var(--surface)',
+          border: '0.5px solid var(--border-faint)',
+          borderRadius: 8,
+          padding: '6px 12px',
+          fontSize: 11,
+          color: 'var(--muted)',
+          cursor: 'pointer',
+        }}
+      >
+        {open ? 'Close Debug' : 'Debug'}
+      </button>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '100%',
+            right: 0,
+            marginBottom: 8,
+            width: 320,
+            maxHeight: 400,
+            overflowY: 'auto',
+            background: 'var(--ink-light)',
+            border: '0.5px solid var(--border-faint)',
+            borderRadius: 8,
+            padding: 12,
+            fontSize: 11,
+            fontFamily: "'Space Mono', monospace",
+            color: 'var(--text-primary)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Debug
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div><span style={{ color: 'var(--muted)' }}>Network:</span> {netInfo.online ? '✅ Online' : '❌ Offline'} ({netInfo.type})</div>
+            <div><span style={{ color: 'var(--muted)' }}>UA:</span> {typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 60) : 'N/A'}</div>
+            <div><span style={{ color: 'var(--muted)' }}>Auth User:</span> {currentUser || 'Not signed in'}</div>
+            <div><span style={{ color: 'var(--muted)' }}>PRs in store:</span> {allPRs.length}</div>
+            <div><span style={{ color: 'var(--muted)' }}>Selected repos:</span> {selectedReposSize}</div>
+            <div><span style={{ color: 'var(--muted)' }}>API calls:</span> {apiCalls}</div>
+            <div><span style={{ color: 'var(--muted)' }}>Loading:</span> {loading ? 'Yes' : 'No'}</div>
+            <div><span style={{ color: 'var(--muted)' }}>Last Refresh:</span> {lastRefreshAt ? new Date(lastRefreshAt).toLocaleTimeString() : 'Never'}</div>
+            <div><span style={{ color: 'var(--muted)' }}>Last Error:</span> {message?.type === 'error' ? message.text : 'None'}</div>
+            <div><span style={{ color: 'var(--muted)' }}>Sample PRs (first 3):</span></div>
+            <div style={{ paddingLeft: 8, maxHeight: 120, overflowY: 'auto', fontSize: 10 }}>
+              {allPRs.slice(0, 3).map((pr, i) => (
+                <div key={i} style={{ marginBottom: 4, borderBottom: '0.5px solid var(--border-faint)', paddingBottom: 4 }}>
+                  <div>#{pr.number} {pr.title?.slice(0, 40)}</div>
+                  <div style={{ color: 'var(--muted-dim)' }}>repo: {pr.repository_url?.slice(0, 40)} user: {pr.user?.login}</div>
+                </div>
+              ))}
+              {allPRs.length === 0 && <div style={{ color: 'var(--muted-dim)' }}>No PRs in store</div>}
+            </div>
+            <div><span style={{ color: 'var(--muted)' }}>Local Storage keys:</span></div>
+            <div style={{ paddingLeft: 8, maxHeight: 80, overflowY: 'auto' }}>
+              {(() => {
+                const keys: string[] = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  if (k) keys.push(k);
+                }
+                return keys.length > 0
+                  ? keys.map(k => <div key={k} style={{ color: 'var(--muted-dim)' }}>{k}</div>)
+                  : <div style={{ color: 'var(--muted-dim)' }}>Empty</div>;
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

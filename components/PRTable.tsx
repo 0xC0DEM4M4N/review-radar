@@ -5,6 +5,7 @@ import { useAppStore, COLUMN_META, ColumnKey, PR } from '@/lib/store';
 import {
   escapeHtml,
   formatDateSplit,
+  formatRelativeTime,
   getRepoFullNameFromUrl,
   getRepoNameFromUrl,
   getRepoColorIndex,
@@ -480,37 +481,13 @@ export default function PRTable({ onOpenDrawer, loading }: { onOpenDrawer: (pr: 
       case 'complexity': {
         const breakdown = pr.complexityBreakdown || computeComplexityBreakdown(pr.files || []);
         const score = pr.complexity ?? breakdown.score;
-        let complexityColor = 'var(--muted-dim)';
-        if (score >= 70) complexityColor = 'var(--red)';
-        else if (score >= 50) complexityColor = 'var(--amber)';
-        else if (score >= 30) complexityColor = 'var(--cyan)';
-        else if (score >= 15) complexityColor = 'var(--green)';
-
-        const tooltipLines = [
-          `${breakdown.label} (${score})`,
-          ``,
-          `${t('complexityFiles', { relevant: breakdown.relevantFiles, ignored: breakdown.ignoredFiles })}`,
-          `${t('complexityChurn', { weighted: breakdown.weightedChurn, additions: breakdown.totalAdditions, deletions: breakdown.totalDeletions })}`,
-          `${t('complexitySpread', { spread: breakdown.fileSpread })}`,
-          `${t('complexityIntensity', { intensity: breakdown.intensity })}`,
-        ];
-        if (breakdown.topFiles.length > 0) {
-          tooltipLines.push('', t('complexityTopFiles'));
-          breakdown.topFiles.slice(0, 3).forEach((f) => {
-            tooltipLines.push(`  • ${f.filename.split('/').pop()} (+${f.churn} × ${f.weight})`);
-          });
-        }
+        const level = score <= 20 ? 'low' : score <= 50 ? 'medium' : 'high';
 
         return (
           <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle', textAlign: 'center' }}>
             <span
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: complexityColor,
-                fontFamily: "'Space Mono', monospace",
-              }}
-              title={tooltipLines.join('\n')}
+              className="complexity-badge"
+              data-level={level}
             >
               {score}
             </span>
@@ -542,15 +519,20 @@ export default function PRTable({ onOpenDrawer, loading }: { onOpenDrawer: (pr: 
             </div>
           </td>
         );
-      case 'updated':
+      case 'updated': {
+        const daysSinceUpdate = pr.updated_at
+          ? Math.floor((Date.now() - new Date(pr.updated_at).getTime()) / (1000 * 60 * 60 * 24))
+          : 0;
+        const staleColor = daysSinceUpdate >= 5 ? 'var(--red)' : daysSinceUpdate >= 2 ? 'var(--amber)' : undefined;
         return (
           <td key={key} className="rr-age" style={{ verticalAlign: 'middle' }}>
             <div style={{ lineHeight: 1.3, textAlign: 'center' }}>
-              <div>{updatedDate}</div>
-              <div style={{ fontSize: 10, color: 'var(--muted-dim)' }}>{updatedTime}</div>
+              <div style={staleColor ? { color: staleColor, fontWeight: 600 } : undefined}>{updatedDate}</div>
+              <div style={{ fontSize: 10, color: staleColor || 'var(--muted-dim)' }}>{updatedTime}</div>
             </div>
           </td>
         );
+      }
       case 'details':
         return (
           <td key={key} className="rr-col-narrow" style={{ verticalAlign: 'middle' }}>
@@ -655,6 +637,7 @@ export default function PRTable({ onOpenDrawer, loading }: { onOpenDrawer: (pr: 
 
   return (
     <div className="rr-table-wrap">
+      <div className="rr-desktop-table">
       <table ref={tableRef}>
         <thead>
           <tr>
@@ -824,6 +807,132 @@ export default function PRTable({ onOpenDrawer, loading }: { onOpenDrawer: (pr: 
           )}
         </div>
       )}
+      </div>{/* end rr-desktop-table */}
+
+      {/* ── Mobile cards ── */}
+      <div className="rr-mobile-cards">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rr-pr-card rr-pr-card-skeleton">
+              <div className="rr-pr-card-row">
+                <div className="rr-skeleton" style={{ width: '70%', height: 14 }} />
+              </div>
+              <div className="rr-pr-card-row">
+                <div className="rr-skeleton" style={{ width: '40%', height: 12 }} />
+              </div>
+            </div>
+          ))
+        ) : filteredPRs.length === 0 ? (
+          <div className="rr-pr-card-empty">
+            <div style={{ margin: '0 auto 16px', width: 48, height: 48, borderRadius: '50%', background: 'var(--cyan-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg style={{ color: 'var(--cyan)' }} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            </div>
+            <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: 'var(--text-primary)', marginBottom: 6 }}>{t('noPRsTitle')}</p>
+            <p style={{ fontSize: 12, color: 'var(--muted-dim)' }}>{t('noPRsDescription')}</p>
+          </div>
+        ) : (
+          displayPRs.map((pr) => {
+            const repoUrl = pr.repository_url || pr.url || '';
+            const repoName = getRepoNameFromUrl(repoUrl);
+            const statusKey = getStatusKey(pr);
+            const buildKey = getBuildKey(pr);
+            const breakdown = computeComplexityBreakdown(pr.files || []);
+            const complexityScore = pr.complexity ?? breakdown.score;
+            const complexityLevel = complexityScore <= 20 ? 'low' : complexityScore <= 50 ? 'medium' : 'high';
+            const relTime = formatRelativeTime(pr.updated_at, locale);
+            return (
+              <div
+                key={pr.id}
+                className="rr-pr-card"
+                onClick={() => onOpenDrawer(pr)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDrawer(pr); } }}
+              >
+                {/* Title + Author */}
+                <div className="rr-pr-card-section rr-pr-card-main">
+                  <a
+                    href={pr.html_url}
+                    target="_blank"
+                    className="rr-pr-card-title"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {pr.title}
+                  </a>
+                  <div className="rr-pr-card-meta">
+                    <span className="rr-pr-card-author">{pr.user?.login || tc('unknown')}</span>
+                    {repoName && <span className="rr-pr-card-repo">{repoName}</span>}
+                  </div>
+                </div>
+
+                {/* Status + Complexity + Time */}
+                <div className="rr-pr-card-section rr-pr-card-stats">
+                  <span className={`rr-badge ${STATUS_BADGE_MAP[statusKey] || 'rr-badge-open'}`}>
+                    {t(`status.${statusKey}`)}
+                  </span>
+                  <span className={`complexity-badge rr-pr-card-complexity`} data-level={complexityLevel}>
+                    {complexityScore}
+                  </span>
+                  <span className="rr-pr-card-time">{relTime}</span>
+                </div>
+
+                {/* Labels */}
+                {pr.labels && pr.labels.length > 0 && (
+                  <div className="rr-pr-card-section rr-pr-card-labels">
+                    {pr.labels.map((label) => (
+                      <span
+                        key={label.name}
+                        className="rr-pr-card-label"
+                        style={{ backgroundColor: `#${label.color}33`, borderColor: `#${label.color}44` }}
+                      >
+                        {label.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="rr-pr-card-section rr-pr-card-actions">
+                  <button
+                    className="rr-pr-card-btn rr-pr-card-btn-primary"
+                    onClick={(e) => { e.stopPropagation(); onOpenDrawer(pr); }}
+                  >
+                    {tc('moreDetails')} ▼
+                  </button>
+                  <a
+                    href={pr.html_url}
+                    target="_blank"
+                    className="rr-pr-card-btn rr-pr-card-btn-secondary"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    GitHub →
+                  </a>
+                </div>
+              </div>
+            );
+          })
+        )}
+        {/* Mobile pagination */}
+        {filteredPRs.length > 0 && (
+          <div className="rr-mobile-pagination">
+            <span className="rr-mobile-page-info">
+              {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredPRs.length)} of {filteredPRs.length}
+            </span>
+            <div className="rr-mobile-page-btns">
+              <button
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="rr-mobile-page-btn"
+              >‹ Prev</button>
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="rr-mobile-page-btn"
+              >Next ›</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

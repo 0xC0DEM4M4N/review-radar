@@ -200,6 +200,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'reviewradar-storage',
       partialize: (state) => ({
+        currentUser: state.currentUser,
         selectedRepos: Array.from(state.selectedRepos),
         columnOrder: state.columnOrder,
         onboardingStep: state.onboardingStep,

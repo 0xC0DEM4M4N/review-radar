@@ -57,12 +57,12 @@ export default function TopNav() {
     >
       <Link href={`/${locale}`} className="flex items-center gap-2.5 no-underline">
         <img className="h-7 w-7 shrink-0" src="/assets/logo.svg" alt="ReviewRadar" />
-        <span className="font-mono text-[15px] font-bold tracking-tight text-text-primary">
+        <span className="rr-topnav-logo font-mono text-[15px] font-bold tracking-tight text-text-primary">
           {t('logoReview')}<span style={{ color: 'var(--cyan)' }}>{t('logoRadar')}</span>
         </span>
       </Link>
       <div className="flex-1" />
-      <ul className="flex list-none gap-6" style={{ margin: 0, padding: 0 }}>
+      <ul className="rr-topnav-links flex list-none gap-6" style={{ margin: 0, padding: 0 }}>
         <li>
           <Link href={`/${locale}`} className="text-[13px] no-underline transition-colors duration-150 hover:text-text-primary" style={{ color: linkColor }}>
             {t('home')}
@@ -77,7 +77,7 @@ export default function TopNav() {
       {!pathname?.startsWith(`/${locale}/dashboard`) && (
         <Link
           href={`/${locale}/dashboard`}
-          className="inline-flex items-center gap-1.5 rounded-full border-none font-mono text-xs font-bold no-underline transition-opacity duration-150"
+          className="rr-topnav-dashboard-btn inline-flex items-center gap-1.5 rounded-full border-none font-mono text-xs font-bold no-underline transition-opacity duration-150"
           style={{ background: 'var(--cyan)', color: 'var(--ink-light)', padding: '8px 20px' }}
         >
           {t('openDashboard')}
@@ -99,7 +99,7 @@ export default function TopNav() {
         {isLight ? t('themeLight') : t('themeDark')}
       </button>
       <a
-        href="https://github.com"
+        href="https://github.com/0xC0DEM4M4N/review-radar"
         target="_blank"
         rel="noopener noreferrer"
         className="ml-2 transition-colors hover:text-text-primary"

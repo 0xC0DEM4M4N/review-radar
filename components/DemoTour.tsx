@@ -97,10 +97,20 @@ const STEPS: Step[] = [
   },
 ];
 
+const TOUR_DISMISSED_KEY = 'reviewradar-tour-dismissed';
+
 export default function DemoTour({ children }: { children: ReactNode }) {
-  const [active, setActive] = useState(true);
+  const [active, setActive] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !localStorage.getItem(TOUR_DISMISSED_KEY);
+  });
   const [stepIndex, setStepIndex] = useState(0);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const dismiss = useCallback(() => {
+    setActive(false);
+    localStorage.setItem(TOUR_DISMISSED_KEY, '1');
+  }, []);
 
   const step = STEPS[stepIndex];
 
@@ -155,7 +165,7 @@ export default function DemoTour({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {active && <div className="tour-backdrop" onClick={() => setActive(false)} />}
+      {active && <div className="tour-backdrop" onClick={dismiss} />}
       {active && (
         <div
           className="tour-tooltip"
@@ -164,6 +174,11 @@ export default function DemoTour({ children }: { children: ReactNode }) {
           aria-label={step.title}
           aria-describedby="tour-desc"
         >
+          <button
+            onClick={dismiss}
+            className="tour-close"
+            aria-label="Close tour"
+          >×</button>
           <div className="tour-step-indicator">
             {STEPS.map((s, i) => (
               <span key={s.id} className={`tour-dot ${i === stepIndex ? 'active' : ''} ${i < stepIndex ? 'done' : ''}`} />
@@ -182,7 +197,7 @@ export default function DemoTour({ children }: { children: ReactNode }) {
                 Next
               </button>
             ) : (
-              <button className="tour-btn tour-btn-primary" onClick={() => setStepIndex(0)}>
+              <button className="tour-btn tour-btn-primary" onClick={dismiss}>
                 Got it
               </button>
             )}

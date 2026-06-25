@@ -36,7 +36,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 {t('tryDemo')}
               </Link>
               <a className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-transparent px-6 py-3.5 text-sm text-white/60 no-underline transition-all duration-150 hover:border-white/35 hover:text-text-primary"
-                href="https://github.com" target="_blank" rel="noopener noreferrer">{t('viewOnGitHub')}</a>
+                href="https://github.com/0xC0DEM4M4N/review-radar" target="_blank" rel="noopener noreferrer">{t('viewOnGitHub')}</a>
             </div>
             <div className="flex gap-8 animate-fade-up">
               <div>

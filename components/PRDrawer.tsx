@@ -33,6 +33,11 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
   const locale = useLocale();
 
   useEffect(() => {
+    document.body.classList.add('rr-drawer-open');
+    return () => document.body.classList.remove('rr-drawer-open');
+  }, []);
+
+  useEffect(() => {
     if (!pr) return;
     marked.setOptions({ breaks: true, gfm: true });
     const desc = pr.body || t('noDescription');
@@ -94,16 +99,17 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/50 transition-opacity z-[300]"
+        className="fixed inset-0 bg-black/50 transition-opacity z-[99998]"
         onClick={onClose}
       />
       <div
-        className="top-0 right-0 bottom-0 w-full max-w-lg bg-ink-light border-l border-border-faint overflow-y-auto p-6 absolute z-[310]"
+        className="rr-drawer-panel"
       >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-text-primary pr-4">{pr.title || t('untitledPR')}</h2>
-          <button onClick={onClose} className="text-muted hover:text-text-primary text-xl">{t('close')}</button>
+        <div className="rr-drawer-header">
+          <h2 className="text-base font-semibold text-text-primary leading-tight pr-2">{pr.title || t('untitledPR')}</h2>
+          <button onClick={onClose} className="text-muted hover:text-text-primary text-2xl leading-none flex-shrink-0" aria-label={t('close')}>×</button>
         </div>
+        <div className="rr-drawer-body">
 
         {/* Complexity breakdown */}
         {breakdown && breakdown.score > 0 && (
@@ -171,6 +177,7 @@ export default function PRDrawer({ pr, onClose }: { pr: PR | null; onClose: () =
 
         <div className="mb-6 text-sm text-muted leading-relaxed pr-drawer-desc prose" dangerouslySetInnerHTML={{ __html: description }} />
         <div className="pr-drawer-comments" dangerouslySetInnerHTML={{ __html: commentsHtml }} />
+      </div>
       </div>
     </>
   );

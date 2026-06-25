@@ -8,7 +8,7 @@ interface ProgressCallback {
 }
 
 interface ResultCallback {
-  (prs: PR[], errors: string[], user: string, complete: boolean): void;
+  (prs: PR[], errors: string[], user: string, complete: boolean, apiCalls?: number): void;
 }
 
 interface ErrorCallback {
@@ -64,7 +64,7 @@ export function usePRLoader() {
             cbs.onProgress?.(msg.phase, msg.current, msg.total);
             break;
           case 'RESULT':
-            cbs.onResult(msg.prs, msg.errors, msg.user, msg.complete);
+            cbs.onResult(msg.prs, msg.errors, msg.user, msg.complete, msg.apiCalls);
             if (msg.complete) {
               worker?.terminate();
               workerRef.current = null;

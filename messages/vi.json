@@ -583,7 +583,13 @@
     "colComplexity": "Độ phức tạp",
     "colCreated": "Đã tạo",
     "colUpdated": "Đã cập nhật",
-    "colDetails": "Chi tiết"
+    "colDetails": "Chi tiết",
+    "shareTitle": "Nếu bạn thấy trang này hữu ích, hãy chia sẻ với bạn bè và đồng nghiệp.",
+    "shareWhatsApp": "WhatsApp",
+    "shareTwitter": "X (Twitter)",
+    "shareEmail": "Email",
+    "shareCopyLink": "Sao chép liên kết",
+    "shareBuyCoffee": "\u2615 Mua tôi một cà phê"
   },
   "components": {
     "sidebar": {

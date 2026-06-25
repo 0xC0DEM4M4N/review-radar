@@ -98,6 +98,21 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const body = await githubRes.text();
 
+    // If GitHub returned an error, forward its message in our response
+    if (!githubRes.ok) {
+      let githubError: string;
+      try {
+        const errJson = JSON.parse(body);
+        githubError = errJson.message || body.slice(0, 200);
+      } catch {
+        githubError = body.slice(0, 200);
+      }
+      return new Response(JSON.stringify({ error: `GitHub API error ${githubRes.status}: ${githubError}` }), {
+        status: githubRes.status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     if (githubRes.status === 404 && isOAuthToken && path.startsWith('repos/')) {
       return new Response(
         JSON.stringify({

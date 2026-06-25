@@ -582,7 +582,13 @@
     "colEffort": "Temps de révision",
     "colCreated": "Créé",
     "colUpdated": "Mis à jour",
-    "colDetails": "Détails"
+    "colDetails": "Détails",
+    "shareTitle": "Si vous avez trouvé ce site utile, partagez-le avec vos amis et collègues.",
+    "shareWhatsApp": "WhatsApp",
+    "shareTwitter": "X (Twitter)",
+    "shareEmail": "E-mail",
+    "shareCopyLink": "Copier le lien",
+    "shareBuyCoffee": "\u2615 Offrez-moi un café"
   },
   "components": {
     "sidebar": {

@@ -583,7 +583,13 @@
     "colEffort": "Review Time",
     "colCreated": "Created",
     "colUpdated": "Updated",
-    "colDetails": "Details"
+    "colDetails": "Details",
+    "shareTitle": "If you have found this site useful, please share with your friends and colleagues.",
+    "shareWhatsApp": "WhatsApp",
+    "shareTwitter": "X (Twitter)",
+    "shareEmail": "Email",
+    "shareCopyLink": "Copy link",
+    "shareBuyCoffee": "\u2615 Buy me a coffee"
   },
   "components": {
     "sidebar": {

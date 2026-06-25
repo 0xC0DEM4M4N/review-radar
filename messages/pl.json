@@ -583,7 +583,13 @@
     "colComplexity": "Złożoność",
     "colCreated": "Utworzono",
     "colUpdated": "Zaktualizowano",
-    "colDetails": "Szczegóły"
+    "colDetails": "Szczegóły",
+    "shareTitle": "Jeśli uznałeś tę stronę za przydatną, podziel się nią ze znajomymi i współpracownikami.",
+    "shareWhatsApp": "WhatsApp",
+    "shareTwitter": "X (Twitter)",
+    "shareEmail": "E-mail",
+    "shareCopyLink": "Skopiuj link",
+    "shareBuyCoffee": "\u2615 Postaw mi kawę"
   },
   "components": {
     "sidebar": {

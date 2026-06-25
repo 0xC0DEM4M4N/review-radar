@@ -1,4 +1,5 @@
 import { fetchCurrentUser, fetchReposPRs, fetchPRReviews } from '../lib/githubApi';
+import { requestCount, resetRequestCount } from '../lib/apiClient';
 import type { PR } from '../lib/store';
 
 interface LoadPRsMessage {
@@ -23,6 +24,7 @@ interface ResultMessage {
   errors: string[];
   user: string;
   complete: boolean;
+  apiCalls: number;
 }
 
 interface ErrorMessage {
@@ -49,6 +51,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   if (msg.type !== 'LOAD_PRS') return;
 
   aborted = false;
+  resetRequestCount();
   const { repos } = msg;
   const errors: string[] = [];
 
@@ -92,6 +95,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       errors: [...errors],
       user,
       complete: false,
+      apiCalls: requestCount,
     } satisfies ResultMessage);
 
     if (checkAborted()) return;
@@ -133,6 +137,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         errors: [...errors, ...batchErrors],
         user,
         complete: isComplete,
+        apiCalls: requestCount,
       } satisfies ResultMessage);
 
       self.postMessage({ type: 'PROGRESS', phase: 'prs', current: batchEnd, total: allPRsData.length } satisfies ProgressMessage);
@@ -146,6 +151,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
         errors: [...errors],
         user,
         complete: true,
+        apiCalls: requestCount,
       } satisfies ResultMessage);
     }
   } catch (e: any) {
