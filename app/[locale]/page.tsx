@@ -12,6 +12,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const tf = await getTranslations({ locale, namespace: 'components.prfilter' });
   const tpr = await getTranslations({ locale, namespace: 'components.prtable' });
   const td = await getTranslations({ locale, namespace: 'dashboard' });
+  const tw = await getTranslations({ locale, namespace: 'workflows' });
 
   return (
     <>
@@ -267,8 +268,11 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 <div className="rr-stat">
                   <div className="rr-stat-label">{ts('blocked')}</div>
                   <div className="rr-stat-val" style={{ color: 'var(--red)' }}>3</div>
-                </div>
-              </div>
+            </div>
+            <div className="mt-6 max-w-[360px] text-[10px] leading-relaxed text-white/25">
+              {t('zeroBackendFootnote')}
+            </div>
+          </div>
               <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <button className="rr-filter-toggle">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
