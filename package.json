@@ -25,6 +25,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "@next/third-parties": "^16.2.9",
     "chart.js": "^4.5.1",
     "dompurify": "^3.4.5",
     "marked": "^18.0.3",

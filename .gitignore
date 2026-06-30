@@ -24,8 +24,9 @@ pnpm-debug.log*
 # VSCode settings
 .vscode/
 
+.kimi/
 .qodo/
-
+.next/
 # Coverage reports
 coverage/
 

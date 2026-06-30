@@ -16,9 +16,9 @@ export const onRequest: PagesFunction = async (context) => {
   // writes a stricter policy with per-build inline-script hashes to dist/_headers.
   const csp =
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; " +
+    "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://www.googletagmanager.com; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "connect-src 'self' https://api.github.com https://cloudflareinsights.com; " +
+    "connect-src 'self' https://api.github.com https://cloudflareinsights.com https://www.google-analytics.com https://www.googletagmanager.com; " +
     "img-src 'self' https: data:; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "frame-ancestors 'none'; " +

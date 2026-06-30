@@ -6,12 +6,16 @@ import { checkRateLimit } from '../../lib/rateLimit';
 const COOKIE_NAME = 'rr_session';
 
 const ALLOWED_PATHS = [
+  /^repos\/[^/]+\/[^/]+$/,
   /^repos\/[^/]+\/[^/]+\/pulls$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/files$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/reviews$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/comments$/,
   /^repos\/[^/]+\/[^/]+\/commits\/[a-f0-9]+\/check-runs$/,
+  /^repos\/[^/]+\/[^/]+\/commits$/,
+  /^repos\/[^/]+\/[^/]+\/actions\/runs$/,
+  /^repos\/[^/]+\/[^/]+\/actions\/runs\/\d+\/jobs$/,
   /^search\/issues$/,
   /^user$/,
 ];

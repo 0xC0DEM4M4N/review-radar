@@ -176,3 +176,80 @@ export async function fetchCurrentUser(): Promise<string> {
   const data = await proxyGitHub('user');
   return data.login;
 }
+
+export type WorkflowRun = {
+  id: number;
+  name: string;
+  run_number: number;
+  status: string;
+  conclusion: string | null;
+  head_branch: string;
+  head_sha: string;
+  run_started_at: string;
+  html_url: string;
+  head_commit?: { message?: string };
+};
+
+export type WorkflowJob = {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  started_at?: string;
+  completed_at?: string;
+  html_url: string;
+};
+
+export type Commit = {
+  sha: string;
+  html_url: string;
+  commit: { message: string; committer?: { date?: string } };
+};
+
+export async function fetchRepo(
+  repo: string
+): Promise<{ default_branch: string; name: string; full_name: string }> {
+  validateRepo(repo);
+  const [owner, name] = repo.trim().split('/');
+  return proxyGitHub(`repos/${owner}/${name}`);
+}
+
+export async function fetchLatestCommit(repo: string, branch: string): Promise<Commit> {
+  validateRepo(repo);
+  const [owner, name] = repo.trim().split('/');
+  const data = await proxyGitHub(
+    `repos/${owner}/${name}/commits?sha=${encodeURIComponent(branch)}&per_page=1`
+  );
+  return (data || [])[0];
+}
+
+export async function fetchWorkflowRuns(
+  repo: string,
+  options: { branch?: string; sha?: string; limit?: number } = {}
+): Promise<{ workflow_runs: WorkflowRun[]; total_count: number }> {
+  validateRepo(repo);
+  const [owner, name] = repo.trim().split('/');
+  const params = new URLSearchParams();
+  params.set('per_page', String(options.limit ?? 10));
+  if (options.branch) params.set('branch', options.branch);
+  if (options.sha) params.set('head_sha', options.sha);
+  return proxyGitHub(`repos/${owner}/${name}/actions/runs?${params.toString()}`);
+}
+
+export async function fetchRunJobs(
+  repo: string,
+  runId: number
+): Promise<{ jobs: WorkflowJob[]; total_count: number }> {
+  validateRepo(repo);
+  const [owner, name] = repo.trim().split('/');
+  return proxyGitHub(`repos/${owner}/${name}/actions/runs/${runId}/jobs`);
+}
+
+export async function fetchCommitCheckRuns(
+  repo: string,
+  sha: string
+): Promise<{ check_runs: any[]; total_count: number }> {
+  validateRepo(repo);
+  const [owner, name] = repo.trim().split('/');
+  return proxyGitHub(`repos/${owner}/${name}/commits/${sha}/check-runs`);
+}

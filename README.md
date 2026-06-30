@@ -1,6 +1,6 @@
 # ReviewRadar
 
-A client-side GitHub PR dashboard that gives you a live sweep of every open pull request across your repos — who's blocked, what needs attention, and what's ready to ship.
+A client-side GitHub PR dashboard that gives you a live sweep of every open pull request across your repos — who's blocked, what needs attention, what's ready to ship, and which workflows are failing.
 
 A lightweight Cloudflare Pages Functions backend handles GitHub API proxying and optional OAuth sign-in. Your token is stored in an encrypted `HttpOnly` cookie.
 
@@ -11,9 +11,25 @@ A lightweight Cloudflare Pages Functions backend handles GitHub API proxying and
 - **Live radar sweeps** — Auto-refresh on a configurable interval. Browser notifications for approvals, comments, and build changes.
 - **PR-aware filtering** — Filter by all, mine, needs attention, approved, changes requested, pending, or conflicts. Click any label or status badge to filter instantly.
 - **Diff at a glance** — Review status, build state, mentions, labels, merge conflicts, and last updated — all visible without leaving the dashboard.
+- **Workflow dashboard** — See the latest workflow run for your main branch and all failing feature branches. Expand any card to inspect individual jobs and quality gates (check runs). Branches with failures are auto-highlighted with inline summaries of what broke.
+- **Landing page workflows card** — The home page surfaces failing workflows at a glance, showing status dots, branch names, and inline failure summaries for both live (authenticated) and demo visitors.
+- **Per-repo default branch config** — Store a custom default branch name per repository in Settings, so workflow dashboards always target the right branch.
 - **Size & Complexity scoring** — See the real footprint and calculated complexity of every PR (see below).
 - **Privacy-first auth** — Use a GitHub PAT or OAuth. Tokens are encrypted and stored in `HttpOnly` cookies, never in `localStorage`.
 - **Multi-repo support** — Sweep across as many repositories as you have access to.
+
+---
+
+## Workflow Dashboard
+
+The **Workflows** page (`/workflows`) shows the CI/CD status across your repositories:
+
+- **Main branch card** — Always visible, pinned with a cyan border. Shows the latest run with full job and check-run breakdown. Collapsible to keep the view clean.
+- **Feature branches** — Only failing branches are listed, sorted by severity. Each card shows the branch name, commit message, relative time, and an inline summary of what failed (e.g. "Failing: Npm.Build.Publish.Scan, Jest Unit Tests").
+- **Expand to debug** — Click any branch card to expand and inspect individual jobs and check runs. Failing tasks get a tinted red background so problems stand out.
+- **Status badges** — Overall status per branch (Passing / Failing / Running / Queued) computed from both the workflow run conclusion and individual check-run results.
+
+The landing page embeds a compact **WorkflowsCard** that surfaces the same failing-workflows data, keeping it visible from the moment you land on the site.
 
 ---
 
@@ -127,7 +143,7 @@ The complexity score is colour-coded in the table:
 - [TypeScript](https://www.typescriptlang.org/)
 - [Tailwind CSS](https://tailwindcss.com/)
 - [Zustand](https://github.com/pmndrs/zustand) (state management)
-- [next-intl](https://next-intl-docs.vercel.app/) (i18n — English & French)
+- [next-intl](https://next-intl-docs.vercel.app/) (i18n — English, French, Polish, Vietnamese)
 - [Chart.js](https://www.chartjs.org/) (reports & historical data visualisations)
 
 ---

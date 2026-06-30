@@ -3,6 +3,37 @@
     "title": "ReviewRadar",
     "description": "GitHub PR Dashboard"
   },
+  "workflows": {
+    "title": "Workflow Dashboard",
+    "subtitle": "Current branch workflows and automated checks",
+    "repoLabel": "Repository",
+    "branchLabel": "Branch",
+    "loadWorkflows": "Load",
+    "loading": "Loading workflows…",
+    "noReposTitle": "No repositories saved",
+    "noReposDescription": "Add repositories in Settings to see workflow status.",
+    "goToSettings": "Go to Settings",
+    "notLoggedInTitle": "Not signed in",
+    "notLoggedInDescription": "Sign in with GitHub or add a PAT in Settings to load workflow data.",
+    "latestRun": "Latest run",
+    "workflow": "Workflow",
+    "runNumber": "Run #{number}",
+    "started": "Started {time} ago",
+    "viewWorkflow": "View workflow",
+    "jobs": "Jobs",
+    "noJobs": "No jobs found",
+    "checks": "Checks",
+    "noChecks": "No automated checks found",
+    "pinned": "Pinned",
+    "featureBranches": "Feature branches ({count})",
+    "failingPrefix": "Failing:",
+    "runningPrefix": "Running:",
+    "checksPassing": "{passed} / {total} checks passing",
+    "error": "Error: {message}",
+    "mostRecentCommit": "Most recent commit",
+    "noCommit": "Could not find the latest commit for this branch.",
+    "noWorkflowsOrChecks": "No workflows or automated checks found for this commit."
+  },
   "common": {
     "today": "Today",
     "unknown": "unknown",
@@ -479,7 +510,7 @@
     "step1Saving": "Saving...",
     "step1Error": "Failed to save token",
     "step2Title": "Which repos do you review?",
-    "step2Desc": "Start with 1\u20133. You can add more later.",
+    "step2Desc": "Start with 1–3. You can add more later.",
     "step2Placeholder": "owner/repo",
     "step2Add": "Add",
     "step2Suggestions": "Suggestions",
@@ -488,7 +519,7 @@
     "step3Title": "How do you like to review?",
     "step3Desc": "Choose a view that matches your workflow.",
     "step3OptionAll": "All PRs at a glance",
-    "step3OptionAllDesc": "See everything \u2014 status, author, approvals, build, and more.",
+    "step3OptionAllDesc": "See everything — status, author, approvals, build, and more.",
     "step3OptionUrgent": "Prioritize urgent/risky",
     "step3OptionUrgentDesc": "Complexity and status come first. Catch issues fast.",
     "step3OptionCustom": "I'll configure columns",
@@ -513,7 +544,7 @@
     "importButton": "Import"
   },
   "settings": {
-    "loading": "Loading settings\u2026",
+    "loading": "Loading settings…",
     "title": "Settings",
     "patTitle": "GitHub Access Token",
     "patPlaceholder": "ghp_xxxxxxxxxxxxxxxxxxxx",
@@ -525,7 +556,7 @@
     "repoPlaceholder": "owner/repo",
     "add": "Add",
     "noRepos": "No repositories saved yet.",
-    "remove": "\u2715",
+    "remove": "✕",
     "removeTooltip": "Remove",
     "autoRefreshTitle": "Auto Refresh & Notifications",
     "enableAutoRefresh": "Enable auto-refresh",
@@ -540,7 +571,7 @@
     "repoColorsDesc": "Pick a background colour for each repository so PR rows are easy to identify.",
     "repoColorDefault": "Default",
     "repoColorReset": "Reset",
-    "dragHandle": "\u2630",
+    "dragHandle": "☰",
     "dragHandleTitle": "Drag to reorder",
     "saveColumns": "Save",
     "resetColumns": "Reset",
@@ -589,14 +620,15 @@
     "shareTwitter": "X (Twitter)",
     "shareEmail": "Email",
     "shareCopyLink": "Copy link",
-    "shareBuyCoffee": "\u2615 Buy me a coffee"
+    "shareBuyCoffee": "☕ Buy me a coffee"
   },
   "components": {
     "sidebar": {
       "dashboard": "Dashboard",
       "reports": "Reports",
       "historicalData": "Historical Data",
-      "settings": "Settings"
+      "settings": "Settings",
+      "workflows": "Workflows"
     },
     "topnav": {
       "logoReview": "Review",

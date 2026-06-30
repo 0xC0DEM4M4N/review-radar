@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [userSearch, setUserSearch] = useState('');
   const [apiCalls, setApiCalls] = useState(0);
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [debugEnabled, setDebugEnabled] = useState(false);
 
   // Restore cached PRs on mount so filters (users) are available immediately
   useEffect(() => {
@@ -117,6 +118,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setSavedRepos(JSON.parse(localStorage.getItem('github-repos') || '[]'));
+    setDebugEnabled(typeof window !== 'undefined' && window.location.search.includes('debug=true'));
   }, []);
 
   useEffect(() => {
@@ -418,16 +420,17 @@ export default function DashboardPage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto">
-        {/* Diagnostic status bar */}
-        <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 11, fontFamily: "'Space Mono', monospace", color: 'var(--muted)' }}>
-          <span>PRs: <strong style={{ color: 'var(--text-primary)' }}>{allPRs.length}</strong></span>
-          <span>User: <strong style={{ color: currentUser ? 'var(--green)' : 'var(--red)' }}>{currentUser || 'none'}</strong></span>
-          <span>Repos: <strong style={{ color: 'var(--text-primary)' }}>{selectedRepos.size}</strong></span>
-          <span>API: <strong style={{ color: 'var(--text-primary)' }}>{apiCalls}</strong></span>
-          {message?.type === 'error' && (
-            <span style={{ color: 'var(--red)' }}>Error: {message.text.slice(0, 60)}</span>
-          )}
-        </div>
+        {debugEnabled && (
+          <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 11, fontFamily: "'Space Mono', monospace", color: 'var(--muted)' }}>
+            <span>PRs: <strong style={{ color: 'var(--text-primary)' }}>{allPRs.length}</strong></span>
+            <span>User: <strong style={{ color: currentUser ? 'var(--green)' : 'var(--red)' }}>{currentUser || 'none'}</strong></span>
+            <span>Repos: <strong style={{ color: 'var(--text-primary)' }}>{selectedRepos.size}</strong></span>
+            <span>API: <strong style={{ color: 'var(--text-primary)' }}>{apiCalls}</strong></span>
+            {message?.type === 'error' && (
+              <span style={{ color: 'var(--red)' }}>Error: {message.text.slice(0, 60)}</span>
+            )}
+          </div>
+        )}
         {sessionChecked && !currentUser && (
           <div
             style={{
@@ -561,10 +564,10 @@ export default function DashboardPage() {
         <div style={{ height: 1, background: 'var(--border-faint)', marginBottom: 16 }} />
 
         {/* ── SECTION 2: SEARCH & FILTERS ── */}
-        <div className="rr-search-filter-row" style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24 }}>
+        <div className="rr-search-filter-row flex flex-col lg:flex-row gap-3 mb-6">
           {/* Search Input Wrapper */}
-          <div className="rr-search-input-wrap" style={{
-            flex: 1, display: 'flex', alignItems: 'center', height: 36,
+          <div className="rr-search-input-wrap w-full lg:w-3/5" style={{
+            display: 'flex', alignItems: 'center', height: 36,
             background: 'var(--surface)', borderRadius: 8, padding: '0 12px',
           }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8, flexShrink: 0 }} aria-hidden="true">
@@ -614,16 +617,19 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Users Dropdown */}
-          <div className="rr-filter-wrapper" style={{ position: 'relative', flexShrink: 0 }} ref={userDropdownRef}>
-            <button
-              onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, height: 36, minWidth: 200,
-                background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)',
-                borderRadius: 8, padding: '0 12px', cursor: 'pointer',
-                color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
-              }}
+          {/* Dropdowns */}
+          <div className="flex flex-col md:flex-row gap-3 w-full lg:w-2/5">
+            {/* Users Dropdown */}
+            <div className="rr-filter-wrapper w-full md:w-1/2 lg:w-1/2" style={{ position: 'relative' }} ref={userDropdownRef}>
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="w-full"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, height: 36,
+                  background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)',
+                  borderRadius: 8, padding: '0 12px', cursor: 'pointer',
+                  color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+                }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ink-light)'; }}
             >
@@ -697,16 +703,17 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Repos Dropdown */}
-          <div className="rr-filter-wrapper" style={{ position: 'relative', flexShrink: 0 }} ref={dropdownRef}>
-            <button
-              onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, height: 36, minWidth: 200,
-                background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)',
-                borderRadius: 8, padding: '0 12px', cursor: 'pointer',
-                color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
-              }}
+            {/* Repos Dropdown */}
+            <div className="rr-filter-wrapper w-full md:w-1/2 lg:w-1/2" style={{ position: 'relative' }} ref={dropdownRef}>
+              <button
+                onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
+                className="w-full"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, height: 36,
+                  background: 'var(--ink-light)', border: '0.5px solid var(--border-faint)',
+                  borderRadius: 8, padding: '0 12px', cursor: 'pointer',
+                  color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+                }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ink-light)'; }}
             >
@@ -773,6 +780,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
 
@@ -813,15 +821,17 @@ export default function DashboardPage() {
         )}
 
         {/* Debug panel */}
-        <DebugPanel
-          loading={loading}
-          message={message}
-          lastRefreshAt={lastRefreshAt}
-          allPRs={allPRs}
-          currentUser={currentUser}
-          selectedReposSize={selectedRepos.size}
-          apiCalls={apiCalls}
-        />
+        {debugEnabled && (
+          <DebugPanel
+            loading={loading}
+            message={message}
+            lastRefreshAt={lastRefreshAt}
+            allPRs={allPRs}
+            currentUser={currentUser}
+            selectedReposSize={selectedRepos.size}
+            apiCalls={apiCalls}
+          />
+        )}
       </div>
 
     </Layout>

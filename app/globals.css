@@ -954,7 +954,7 @@ body > * {
   }
 
   .rr-pr-card {
-    background: var(--white);
+    background: var(--ink-light);
     border: none;
     border-radius: 10px;
     cursor: pointer;
@@ -1873,6 +1873,12 @@ body > * {
   flex: 1 1 220px;
   min-width: 0;
 }
+@media (max-width: 1024px) {
+  .rr-search-filter-row > div,
+  .rr-search-filter-row > button {
+    flex: auto;
+  }
+}
 
 @media (max-width: 640px) {
   .rr-search-filter-row {
@@ -1882,6 +1888,7 @@ body > * {
   .rr-search-filter-row > div,
   .rr-search-filter-row > button {
     width: 100%;
+    flex: auto;
   }
 }
 

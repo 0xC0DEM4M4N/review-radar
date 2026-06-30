@@ -1,6 +1,9 @@
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import TopNav from '@/components/TopNav';
 import { getTranslations } from 'next-intl/server';
+
+const WorkflowsCard = dynamic(() => import('@/components/WorkflowsCard'));
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -492,6 +495,13 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 </table>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Workflows Card */}
+        <section className="mx-auto max-w-[1280px] px-12 pb-[100px] max-md:px-5 max-md:pb-[60px]">
+          <div className="mx-auto max-w-2xl">
+            <WorkflowsCard />
           </div>
         </section>
 

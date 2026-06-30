@@ -19,6 +19,13 @@ export default function Sidebar() {
       ),
     },
     {
+      label: t('workflows'),
+      href: `/${locale}/workflows`,
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><path d="M10 7h4" /><path d="M7 10v4" /><path d="M17 10v4" /></svg>
+      ),
+    },
+    {
       label: t('reports'),
       href: `/${locale}/reports`,
       icon: (

@@ -3,6 +3,37 @@
     "title": "ReviewRadar",
     "description": "Tableau de bord GitHub PR"
   },
+  "workflows": {
+    "title": "Workflow Dashboard",
+    "subtitle": "Current branch workflows and automated checks",
+    "repoLabel": "Repository",
+    "branchLabel": "Branch",
+    "loadWorkflows": "Load",
+    "loading": "Loading workflows…",
+    "noReposTitle": "No repositories saved",
+    "noReposDescription": "Add repositories in Settings to see workflow status.",
+    "goToSettings": "Go to Settings",
+    "notLoggedInTitle": "Not signed in",
+    "notLoggedInDescription": "Sign in with GitHub or add a PAT in Settings to load workflow data.",
+    "latestRun": "Latest run",
+    "workflow": "Workflow",
+    "runNumber": "Run #{number}",
+    "started": "Started {time} ago",
+    "viewWorkflow": "View workflow",
+    "jobs": "Jobs",
+    "noJobs": "No jobs found",
+    "checks": "Checks",
+    "noChecks": "No automated checks found",
+    "pinned": "Pinned",
+    "featureBranches": "Feature branches ({count})",
+    "failingPrefix": "Failing:",
+    "runningPrefix": "Running:",
+    "checksPassing": "{passed} / {total} checks passing",
+    "error": "Error: {message}",
+    "mostRecentCommit": "Most recent commit",
+    "noCommit": "Could not find the latest commit for this branch.",
+    "noWorkflowsOrChecks": "No workflows or automated checks found for this commit."
+  },
   "common": {
     "today": "Aujourd'hui",
     "unknown": "inconnu",
@@ -588,14 +619,15 @@
     "shareTwitter": "X (Twitter)",
     "shareEmail": "E-mail",
     "shareCopyLink": "Copier le lien",
-    "shareBuyCoffee": "\u2615 Offrez-moi un café"
+    "shareBuyCoffee": "☕ Offrez-moi un café"
   },
   "components": {
     "sidebar": {
       "dashboard": "Tableau de bord",
       "reports": "Rapports",
       "historicalData": "Données historiques",
-      "settings": "Paramètres"
+      "settings": "Paramètres",
+      "workflows": "Workflows"
     },
     "topnav": {
       "logoReview": "Review",

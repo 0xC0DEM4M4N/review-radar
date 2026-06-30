@@ -48,6 +48,7 @@ export default function SettingsPage() {
   // Repositories
   const [repoInput, setRepoInput] = useState('');
   const [repos, setRepos] = useState<string[]>([]);
+  const [repoBranches, setRepoBranches] = useState<Record<string, string>>({});
 
   // Auto refresh & notifications
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -158,6 +159,7 @@ export default function SettingsPage() {
     });
 
     setRepos(loadJSON<string[]>('github-repos', []));
+    setRepoBranches(loadJSON<Record<string, string>>('reviewradar-repo-branches', {}));
 
     setAutoRefresh(loadJSON('reviewradar-auto-refresh', false));
     setRefreshInterval(loadJSON('reviewradar-refresh-interval', 5));
@@ -206,8 +208,12 @@ export default function SettingsPage() {
     const selected = loadJSON<string[]>('selected-repos', []);
     const nextSelected = selected.filter((r) => r !== repo);
     saveJSON('selected-repos', nextSelected);
-    // Clear any custom colour for the removed repo
+    // Clear any custom colour and branch config for the removed repo
     setRepoColor(repo, null);
+    const nextBranches = { ...repoBranches };
+    delete nextBranches[repo];
+    setRepoBranches(nextBranches);
+    saveJSON('reviewradar-repo-branches', nextBranches);
   };
 
   const handleAutoRefreshChange = (v: boolean) => {
@@ -330,6 +336,8 @@ export default function SettingsPage() {
     if (!window.confirm(t('confirmClearRepos'))) return;
     setRepos([]);
     localStorage.removeItem('github-repos');
+    setRepoBranches({});
+    localStorage.removeItem('reviewradar-repo-branches');
   };
 
   const setOnboardingStep = useAppStore((s) => s.setOnboardingStep);
@@ -347,6 +355,7 @@ export default function SettingsPage() {
   const gatherConfig = () => ({
     repositories: loadJSON<string[]>('github-repos', []),
     selectedRepositories: loadJSON<string[]>('selected-repos', []),
+    repoBranches: loadJSON<Record<string, string>>('reviewradar-repo-branches', {}),
     dashboard: {
       columns: loadJSON('reviewradar-columns', []),
       columnOrder: storeColumnOrder,
@@ -390,6 +399,10 @@ export default function SettingsPage() {
       saveJSON('selected-repos', s.selectedRepositories);
       setSelectedRepos(new Set(s.selectedRepositories));
       setRepos(s.repositories);
+    }
+    if (s.repoBranches) {
+      saveJSON('reviewradar-repo-branches', s.repoBranches);
+      setRepoBranches(s.repoBranches);
     }
     if (s.dashboard) {
       if (s.dashboard.columns) saveJSON('reviewradar-columns', s.dashboard.columns);
@@ -562,12 +575,26 @@ export default function SettingsPage() {
               return (
                 <div
                   key={repo}
-                  className="flex items-center justify-between rounded-lg border border-border-faint bg-ink-light px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border-faint bg-ink-light px-3 py-2"
                 >
-                  <span className="min-w-0 flex-1 truncate text-sm text-text-primary" title={repo}>
-                    {repo}
-                  </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="truncate text-sm text-text-primary" title={repo}>
+                      {repo}
+                    </span>
+                    <input
+                      type="text"
+                      value={repoBranches[repo] || ''}
+                      onChange={(e) => {
+                        const next = { ...repoBranches, [repo]: e.target.value };
+                        setRepoBranches(next);
+                        saveJSON('reviewradar-repo-branches', next);
+                      }}
+                      className="w-16 shrink-0 rounded border border-border-faint bg-ink px-1.5 py-0.5 text-xs text-muted outline-none placeholder:text-muted-dim focus:border-cyan"
+                      placeholder="main"
+                      title="Default branch"
+                    />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
                     <input
                       type="color"
                       value={color}
