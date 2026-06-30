@@ -269,8 +269,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                   <div className="rr-stat-label">{ts('blocked')}</div>
                   <div className="rr-stat-val" style={{ color: 'var(--red)' }}>3</div>
             </div>
-            <div className="mt-6 max-w-[360px] text-[10px] leading-relaxed text-white/25">
-              {t('zeroBackendFootnote')}
             </div>
           </div>
               <div className="flex items-center gap-3 mb-4 flex-wrap">
