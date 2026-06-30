@@ -1,8 +1,8 @@
 # ReviewRadar
 
-A client-side GitHub PR dashboard that gives you a live sweep of every open pull request across your repos — who's blocked, what needs attention, what's ready to ship, and which workflows are failing.
+A client-side\* GitHub PR dashboard that gives you a live sweep of every open pull request across your repos — who's blocked, what needs attention, what's ready to ship, and which workflows are failing.
 
-A lightweight Cloudflare Pages Functions backend handles GitHub API proxying and optional OAuth sign-in. Your token is stored in an encrypted `HttpOnly` cookie.
+\* The dashboard UI is entirely client-side. GitHub API calls are proxied through a Cloudflare Worker that encrypts your token via AES-GCM and stores it in an HttpOnly, Secure, SameSite=Strict cookie — your token never touches the browser's network tab.
 
 ---
 
@@ -183,3 +183,9 @@ See [`DEPLOY.md`](DEPLOY.md) for detailed deployment instructions.
 ## License
 
 MIT
+
+---
+
+## Footnotes
+
+<sup>\*</sup> **How the Cloudflare Worker keeps your token safe.** When you sign in via OAuth or paste a PAT, the token is sent once to a Cloudflare Worker (`POST /api/session`). The worker encrypts the token with AES-GCM using a server-side `SESSION_SECRET` and returns it as an `HttpOnly`, `Secure`, `SameSite=Strict` cookie. The raw token is never stored in `localStorage`, never exposed to client-side JavaScript, and never visible in the browser's network tab. All subsequent GitHub API calls go through the worker (`/api/github/*`), which decrypts the cookie, attaches the token as an HTTP `Authorization` header, and proxies the request. The worker also enforces per-IP rate limiting (1,000 req/min) and validates every request path against a strict allowlist — requests to non-whitelisted GitHub endpoints are rejected with a 403 before they ever reach GitHub.
