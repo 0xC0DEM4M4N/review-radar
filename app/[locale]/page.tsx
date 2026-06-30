@@ -496,7 +496,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                   </tbody>
                 </table>
               </div>
-            </div>
           </div>
         </section>
 
